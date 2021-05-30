@@ -51,6 +51,8 @@ namespace mars {
             bool updateConversationIsSilent(int conversationType, const std::string &target, int line, bool issilent, bool createIfNotExist = true);
             bool updateConversationDraft(int conversationType, const std::string &target, int line, const std::string &draft, bool syncRemote = true);
             
+            std::string getConversationDraft(int conversationType, const std::string &target, int line);
+            
             TConversation GetConversation(int conversationType, const std::string &target, int line);
             std::list<TConversation> GetConversationList(const std::list<int> &conversationTypes, const std::list<int> &lines);
             
@@ -83,6 +85,8 @@ namespace mars {
             bool updateMessageUidAndTimestamp(long messageId, int64_t messageUid, int64_t sendTime);
             bool updateMessageRemoteMediaUrl(long messageId, const std::string &remoteMediaUrl);
             bool updateMessageLocalMediaPath(long messageId, const std::string &localMediaPath);
+            
+            bool setMessageLocalExtra(long messageId, const std::string &extra);
             
             int GetMsgTotalCount(int conversationType, const std::string &target, int line);
             
@@ -123,7 +127,7 @@ namespace mars {
             bool RemoveAllGroupMember(const std::string &groupId);
             void UpdateGroupMember(const std::list<TGroupMember> &retList);
             void RemoveGroupMembers(const std::string &groupId, const std::list<std::string> &members);
-            void AddGroupMembers(const std::string &groupId, const std::list<std::string> &members);
+            void AddGroupMembers(const std::string &groupId, const std::list<std::string> &members, const std::string &extra);
             int UpdateGroupManager(const std::string &groupId, const std::list<std::string> &members, int setOrDelete);
             int UpdateGroupMemberMuteOrAllow(const std::string &groupId, const std::list<std::string> &members, int setOrDelete, bool isAllow);
             int UpdateGroupMemberAlias(const std::string &groupId, const std::string &memberId, const std::string &alias);
@@ -138,6 +142,7 @@ namespace mars {
             bool isMyFriend(const std::string &userId);
             bool isBlackListed(const std::string &userId);
             std::list<std::string> getMyFriendList(bool refresh);
+            std::list<TFriend> getFriendList(bool refresh);
             std::list<std::string> getBlackList(bool refresh);
             
             std::string GetFriendAlias(const std::string &friendId);

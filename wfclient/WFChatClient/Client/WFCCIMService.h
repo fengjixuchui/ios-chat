@@ -21,6 +21,7 @@
 #import "WFCCChannelInfo.h"
 #import "WFCCPCOnlineInfo.h"
 #import "WFCCFileRecord.h"
+#import "WFCCFriend.h"
 
 #pragma mark - 频道通知定义
 //发送消息状态通知
@@ -367,6 +368,15 @@ typedef NS_ENUM(NSInteger, WFCCPlatformType) {
  */
 - (void)setMediaMessagePlayed:(long)messageId;
 
+/**
+ 设置消息的本地附加信息，注意信息不在多端之间同步。
+ 
+ @param messageId 消息ID
+ @param extra          附加信息
+ 
+ @return YES更新成功，NO消息不存在
+ */
+- (BOOL)setMessage:(long)messageId localExtra:(NSString *)extra;
 /**
 获取会话内已读状态
 
@@ -934,6 +944,13 @@ typedef NS_ENUM(NSInteger, WFCCPlatformType) {
  */
 - (NSArray<NSString *> *)getMyFriendList:(BOOL)refresh;
 
+/**
+ 获取当前用户的好友列表
+
+ @param refresh 是否强制从服务器更新，如果不刷新则从本地缓存中读取
+ @return 好友列表
+ */
+- (NSArray<WFCCFriend *> *)getFriendList:(BOOL)refresh;
 
 /**
  搜索好友
@@ -1005,11 +1022,13 @@ typedef NS_ENUM(NSInteger, WFCCPlatformType) {
 
  @param userId 用户ID
  @param reason 请求说明
+ @param extra 扩展信息
  @param successBlock 成功的回调
  @param errorBlock 失败的回调
  */
 - (void)sendFriendRequest:(NSString *)userId
                    reason:(NSString *)reason
+                    extra:(NSString *)extra
                   success:(void(^)(void))successBlock
                     error:(void(^)(int error_code))errorBlock;
 
@@ -1147,7 +1166,9 @@ typedef NS_ENUM(NSInteger, WFCCPlatformType) {
                name:(NSString *)groupName
            portrait:(NSString *)groupPortrait
                type:(WFCCGroupType)type
+         groupExtra:(NSString *)groupExtra
             members:(NSArray *)groupMembers
+        memberExtra:(NSString *)memberExtra
         notifyLines:(NSArray<NSNumber *> *)notifyLines
       notifyContent:(WFCCMessageContent *)notifyContent
             success:(void(^)(NSString *groupId))successBlock
@@ -1165,6 +1186,7 @@ typedef NS_ENUM(NSInteger, WFCCPlatformType) {
  */
 - (void)addMembers:(NSArray *)members
            toGroup:(NSString *)groupId
+       memberExtra:(NSString *)memberExtra
        notifyLines:(NSArray<NSNumber *> *)notifyLines
      notifyContent:(WFCCMessageContent *)notifyContent
            success:(void(^)(void))successBlock
@@ -1844,6 +1866,14 @@ amr文件转成wav数据
 - (void)sendConferenceRequest:(long long)sessionId
                          room:(NSString *)roomId
                       request:(NSString *)request
+                         data:(NSString *)data
+                      success:(void(^)(NSString *authorizedUrl))successBlock
+                        error:(void(^)(int error_code))errorBlock;
+
+- (void)sendConferenceRequest:(long long)sessionId
+                         room:(NSString *)roomId
+                      request:(NSString *)request
+                     advanced:(BOOL)advanced
                          data:(NSString *)data
                       success:(void(^)(NSString *authorizedUrl))successBlock
                         error:(void(^)(int error_code))errorBlock;
