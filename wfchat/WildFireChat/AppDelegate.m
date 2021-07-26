@@ -51,12 +51,18 @@
     [Bugly startWithAppId:@"6f54460b01"];
     
     [WFCCNetworkService startLog];
+//    [[WFCCNetworkService sharedInstance] useSM4];
     [WFCCNetworkService sharedInstance].connectionStatusDelegate = self;
     [WFCCNetworkService sharedInstance].receiveMessageDelegate = self;
     [[WFCCNetworkService sharedInstance] setServerAddress:IM_SERVER_HOST];
-    
+    [[WFCCNetworkService sharedInstance] setBackupAddressStrategy:0];
+//    [[WFCCNetworkService sharedInstance] setBackupAddress:@"192.168.1.120" port:80];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onFriendRequestUpdated:) name:kFriendRequestUpdated object:nil];
     
+    //当PC/Web在线时手机端是否静音，默认静音。如果修改为默认不静音，需要打开下面函数。
+    //另外需要IM服务配置server.mobile_default_silent_when_pc_online为false。必须保持与服务器同步。
+    //[[WFCCIMService sharedWFCIMService] setDefaultSilentWhenPcOnline:NO];
+
 #if WFCU_SUPPORT_VOIP
     //音视频高级版不需要stun/turn服务，请注释掉下面这行。单人版和多人版需要turn服务，请自己部署然后修改配置文件。
     [[WFAVEngineKit sharedEngineKit] addIceServer:ICE_ADDRESS userName:ICE_USERNAME password:ICE_PASSWORD];
@@ -187,17 +193,22 @@
     NSUserDefaults *sharedDefaults = [[NSUserDefaults alloc] initWithSuiteName:WFC_SHARE_APP_GROUP_ID];//此处id要与开发者中心创建时一致
         
     //1. 保存app cookies
-    NSData *cookiesdata = [[AppService sharedAppService] getAppServiceCookies];
-    if([cookiesdata length]) {
-        NSArray *cookies = [NSKeyedUnarchiver unarchiveObjectWithData:cookiesdata];
-        NSHTTPCookie *cookie;
-        for (cookie in cookies) {
-            [[NSHTTPCookieStorage sharedCookieStorageForGroupContainerIdentifier:WFC_SHARE_APP_GROUP_ID] setCookie:cookie];
-        }
+    NSString *authToken = [[AppService sharedAppService] getAppServiceAuthToken];
+    if(authToken.length) {
+        [sharedDefaults setObject:authToken forKey:WFC_SHARE_APPSERVICE_AUTH_TOKEN];
     } else {
-        NSArray *cookies = [[NSHTTPCookieStorage sharedCookieStorageForGroupContainerIdentifier:WFC_SHARE_APP_GROUP_ID] cookiesForURL:[NSURL URLWithString:APP_SERVER_ADDRESS]];
-        for (NSHTTPCookie *cookie in cookies) {
-            [[NSHTTPCookieStorage sharedCookieStorageForGroupContainerIdentifier:WFC_SHARE_APP_GROUP_ID] deleteCookie:cookie];
+        NSData *cookiesdata = [[AppService sharedAppService] getAppServiceCookies];
+        if([cookiesdata length]) {
+            NSArray *cookies = [NSKeyedUnarchiver unarchiveObjectWithData:cookiesdata];
+            NSHTTPCookie *cookie;
+            for (cookie in cookies) {
+                [[NSHTTPCookieStorage sharedCookieStorageForGroupContainerIdentifier:WFC_SHARE_APP_GROUP_ID] setCookie:cookie];
+            }
+        } else {
+            NSArray *cookies = [[NSHTTPCookieStorage sharedCookieStorageForGroupContainerIdentifier:WFC_SHARE_APP_GROUP_ID] cookiesForURL:[NSURL URLWithString:APP_SERVER_ADDRESS]];
+            for (NSHTTPCookie *cookie in cookies) {
+                [[NSHTTPCookieStorage sharedCookieStorageForGroupContainerIdentifier:WFC_SHARE_APP_GROUP_ID] deleteCookie:cookie];
+            }
         }
     }
     
@@ -432,9 +443,8 @@
             
             [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"savedToken"];
             [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"savedUserId"];
+            [[AppService sharedAppService] clearAppServiceAuthInfos];
             [[NSUserDefaults standardUserDefaults] synchronize];
-            [[AppService sharedAppService] clearAppServiceCookies];
-            
         } else if (status == kConnectionStatusLogout) {
             UIViewController *loginVC = [[WFCLoginViewController alloc] init];
             UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:loginVC];
@@ -442,8 +452,8 @@
             
             [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"savedToken"];
             [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"savedUserId"];
+            [[AppService sharedAppService] clearAppServiceAuthInfos];
             [[NSUserDefaults standardUserDefaults] synchronize];
-            [[AppService sharedAppService] clearAppServiceCookies];
         } 
     });
 }
