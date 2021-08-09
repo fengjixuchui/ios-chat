@@ -981,7 +981,6 @@
     }
 }
 - (void)didReportAudioVolume:(NSInteger)volume ofUser:(NSString *)userId {
-    NSLog(@"user %@ report volume %ld", userId, volume);
     [[NSNotificationCenter defaultCenter] postNotificationName:@"wfavVolumeUpdated" object:userId userInfo:@{@"volume":@(volume)}];
     if (!self.currentSession.audioOnly && [userId isEqualToString:self.participants.lastObject]) {
         if (volume > 1000) {
@@ -1084,6 +1083,10 @@
     NSLog(@"did change initiator");
 }
 
+- (void)didMuteStateChanged:(NSArray<NSString *> *_Nonnull)userIds {
+    [self reloadVideoUI];
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"kConferenceMutedStateChanged" object:nil];
+}
 
 - (void)checkAVPermission {
     [self checkCapturePermission:nil];
@@ -1387,7 +1390,4 @@
     }
 }
 
-- (void)onKickoffRequest {
-    [[WFAVEngineKit sharedEngineKit].currentSession endCall];
-}
 @end

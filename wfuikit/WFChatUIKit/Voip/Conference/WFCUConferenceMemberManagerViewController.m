@@ -49,6 +49,7 @@
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onConferenceMemberChanged:) name:@"kConferenceMemberChanged" object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onConferenceEnded:) name:@"kConferenceEnded" object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onConferenceMutedStateChanged:) name:@"kConferenceMutedStateChanged" object:nil];
     self.title = @"参会人员";
     
     [self loadData];
@@ -59,13 +60,18 @@
     self.participants = [[NSMutableArray alloc] init];
     self.audiences = [[NSMutableArray alloc] init];
     
+    WFAVCallSession *callSession = [WFAVEngineKit sharedEngineKit].currentSession;
     NSArray<WFAVParticipantProfile *> *ps =  [WFAVEngineKit sharedEngineKit].currentSession.participants;
     for (WFAVParticipantProfile *p in ps) {
         WFCUConferenceMember *member = [[WFCUConferenceMember alloc] init];
         member.userId = p.userId;
         member.isHost = [p.userId isEqualToString:[WFAVEngineKit sharedEngineKit].currentSession.host];
         member.isVideoEnabled = !p.videoMuted;
+        member.isAudioEnabled = !p.audioMuted;
         member.isMe = NO;
+        member.isAudience = p.audience;
+        member.isAudioOnly = callSession.audioOnly;
+        
         if(self.searchBar.isFirstResponder && ![self isMatchSearchText:member.userId]) {
             continue;
         }
@@ -84,9 +90,12 @@
     
     WFCUConferenceMember *member = [[WFCUConferenceMember alloc] init];
     member.userId = [WFCCNetworkService sharedInstance].userId;
-    member.isHost = [member.userId isEqualToString:[WFAVEngineKit sharedEngineKit].currentSession.host];
-    member.isVideoEnabled = ![WFAVEngineKit sharedEngineKit].currentSession.isVideoMuted;
+    member.isHost = [member.userId isEqualToString:callSession.host];
+    member.isVideoEnabled = !callSession.isVideoMuted;
+    member.isAudioEnabled = !callSession.isAudioMuted;
     member.isMe = YES;
+    member.isAudience = callSession.isAudience;
+    member.isAudioOnly = callSession.audioOnly;
     if(!self.searchBar.isFirstResponder || [self isMatchSearchText:member.userId]) {
         if([WFAVEngineKit sharedEngineKit].currentSession.audience) {
             [self.audiences insertObject:member atIndex:0];
@@ -128,6 +137,11 @@
 
 - (void)onConferenceEnded:(id)sender {
     [self onClose:nil];
+}
+
+- (void)onConferenceMutedStateChanged:(id)sender {
+    [self loadData];
+    [self.tableView reloadData];
 }
 
 - (void)onClose:(id)sender {
@@ -224,7 +238,12 @@
     }];
     
     UIAlertAction *requestQuit = [UIAlertAction actionWithTitle:@"移除成员" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
-        [[WFCUConferenceManager sharedInstance] kickoff:member.userId inConference:[WFAVEngineKit sharedEngineKit].currentSession.callId];
+        WFAVCallSession *currentSession = [WFAVEngineKit sharedEngineKit].currentSession;
+        [currentSession kickoffParticipant:member.userId success:^{
+            NSLog(@"kickoff success");
+        } error:^(int error_code) {
+            NSLog(@"kickoff error");
+        }];
     }];
     
     UIAlertAction *publish = [UIAlertAction actionWithTitle:@"参与互动" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
@@ -237,15 +256,14 @@
     
     [alertController addAction:actionCancel];
     [alertController addAction:showProfile];
-    if([[WFAVEngineKit sharedEngineKit].currentSession.host isEqualToString:[WFCCNetworkService sharedInstance].userId]) {
-        if(!member.isHost) {
-            if(indexPath.section == 0) {
-                [alertController addAction:requestUnpublish];
-            } else {
-                [alertController addAction:requestPublish];
-            }
-            [alertController addAction:requestQuit];
+    
+    if([[WFAVEngineKit sharedEngineKit].currentSession.host isEqualToString:[WFCCNetworkService sharedInstance].userId] && !member.isMe) {
+        if(indexPath.section == 0) {
+            [alertController addAction:requestUnpublish];
+        } else {
+            [alertController addAction:requestPublish];
         }
+        [alertController addAction:requestQuit];
     } else if(member.isMe) {
         if(indexPath.section == 0) {
             [alertController addAction:unpublish];
