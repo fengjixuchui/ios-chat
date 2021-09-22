@@ -1645,6 +1645,24 @@ WFCCGroupInfo *convertProtoGroupInfo(const mars::stn::TGroupInfo &tgi) {
     }];
 }
 
+- (BOOL)isVoipNotificationSilent {
+    NSString *strValue = [[WFCCIMService sharedWFCIMService] getUserSetting:UserSettingScope_Voip_Silent key:@""];
+    return [strValue isEqualToString:@"1"];
+}
+
+- (void)setVoipNotificationSilent:(BOOL)silent
+                          success:(void(^)(void))successBlock
+                            error:(void(^)(int error_code))errorBlock {
+    [[WFCCIMService sharedWFCIMService] setUserSetting:UserSettingScope_Voip_Silent key:@"" value:silent?@"1":@"0" success:^{
+        if (successBlock) {
+            successBlock();
+        }
+    } error:^(int error_code) {
+        if (errorBlock) {
+            errorBlock(error_code);
+        }
+    }];
+}
 - (BOOL)isEnableSyncDraft {
     NSString *strValue = [[WFCCIMService sharedWFCIMService] getUserSetting:UserSettingScope_Disable_Sync_Draft key:@""];
     return ![strValue isEqualToString:@"1"];
@@ -1711,6 +1729,28 @@ WFCCGroupInfo *convertProtoGroupInfo(const mars::stn::TGroupInfo &tgi) {
 - (void)clearNoDisturbingTimes:(void(^)(void))successBlock
                          error:(void(^)(int error_code))errorBlock {
     [[WFCCIMService sharedWFCIMService] setUserSetting:UserSettingScope_No_Disturbing key:@"" value:@"" success:successBlock error:errorBlock];
+}
+
+- (BOOL)isNoDisturbing {
+    __block BOOL isNoDisturbing = NO;
+    [self getNoDisturbingTimes:^(int startMins, int endMins) {
+        NSCalendar *calendar = [NSCalendar calendarWithIdentifier:NSCalendarIdentifierGregorian];
+        NSDateComponents *nowCmps = [calendar components:NSCalendarUnitHour|NSCalendarUnitMinute fromDate:[NSDate date]];
+        int nowMins = (int)(nowCmps.hour * 60 + nowCmps.minute);
+        if (endMins > startMins) {
+            if (endMins > nowMins && nowMins > startMins) {
+                isNoDisturbing = YES;
+            }
+        } else {
+            if (endMins > nowMins || nowMins > startMins) {
+                isNoDisturbing = YES;
+            }
+        }
+        
+    } error:^(int error_code) {
+        
+    }];
+    return isNoDisturbing;
 }
 
 - (BOOL)isHiddenNotificationDetail {
@@ -2652,7 +2692,10 @@ public:
 - (void)muteNotificationWhenPcOnline:(BOOL)isMute
                              success:(void(^)(void))successBlock
                                error:(void(^)(int error_code))errorBlock {
-    [[WFCCIMService sharedWFCIMService] setUserSetting:UserSettingScope_Mute_When_PC_Online key:@"" value:isMute? @"1" : @"0" success:successBlock error:errorBlock];
+    if(!self.defaultSilentWhenPCOnline) {
+        isMute = !isMute;
+    }
+    [[WFCCIMService sharedWFCIMService] setUserSetting:UserSettingScope_Mute_When_PC_Online key:@"" value:isMute? @"0" : @"1" success:successBlock error:errorBlock];
 }
 
 - (void)getConversationFiles:(WFCCConversation *)conversation

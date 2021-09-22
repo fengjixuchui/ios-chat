@@ -32,6 +32,9 @@
     self.tableView.backgroundColor = [WFCUConfigManager globalManager].backgroudColor;
     self.tableView.delegate = self;
     self.tableView.dataSource = self;
+    if (@available(iOS 15, *)) {
+        self.tableView.sectionHeaderTopPadding = 0;
+    }
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
     [self.tableView reloadData];
@@ -90,9 +93,9 @@
 //#pragma mark - Table view data source
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     if([[WFCCIMService sharedWFCIMService] isCommercialServer] && ![[WFCCIMService sharedWFCIMService] isGlobalDisableSyncDraft]) {
-        return 4;
+        return 5;
     } else {
-        return 3;
+        return 4;
     }
 }
 
@@ -102,11 +105,13 @@
     } else if (section == 1) {
         return 1;
     } else if (section == 2) {
+        return 1;
+    } else if (section == 3) {
         if (self.isNoDisturb) {
             return 2;
         }
         return 1;
-    } else if(section == 3) {
+    } else if(section == 4) {
         return 1;
     }
     return 0;
@@ -114,7 +119,7 @@
 
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.section == 2) {
+    if (indexPath.section == 3) {
         if (indexPath.row == 0) {
             WFCUGeneralSwitchTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"switch"];
             if(cell == nil) {
@@ -171,9 +176,12 @@
         cell.textLabel.text = WFCString(@"ReceiveNewMessageNotification");
         cell.type = SwitchType_Setting_Global_Silent;
     } else if(indexPath.section == 1) {
+        cell.textLabel.text = WFCString(@"ReceiveVoipNotification");
+        cell.type = SwitchType_Setting_Voip_Silent;
+    } else if(indexPath.section == 2) {
         cell.textLabel.text = WFCString(@"NotificationShowMessageDetail");
         cell.type = SwitchType_Setting_Show_Notification_Detail;
-    } else if(indexPath.section == 3) {
+    } else if(indexPath.section == 4) {
         cell.textLabel.text = WFCString(@"SyncDraft");
         cell.type = SwitchType_Setting_Sync_Draft;
     }
@@ -183,7 +191,7 @@
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.section == 2 && indexPath.row == 1) {
+    if (indexPath.section == 3 && indexPath.row == 1) {
         WFCUSelectNoDisturbingTimeViewController *vc = [[WFCUSelectNoDisturbingTimeViewController alloc] init];
         vc.startMins = self.startMins;
         vc.endMins = self.endMins;
