@@ -61,7 +61,9 @@ public:
     void onPrepared(long messageId, int64_t savedTime) {
         m_message.messageId = messageId;
         m_message.serverTime = savedTime;
-        [[NSNotificationCenter defaultCenter] postNotificationName:kSendingMessageStatusUpdated object:@(m_message.messageId) userInfo:@{@"status":@(Message_Status_Sending), @"message":m_message}];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:kSendingMessageStatusUpdated object:@(m_message.messageId) userInfo:@{@"status":@(Message_Status_Sending), @"message":m_message}];
+        });
     }
     void onMediaUploaded(std::string remoteUrl) {
         if ([m_message.content isKindOfClass:[WFCCMediaMessageContent class]]) {
@@ -674,6 +676,11 @@ static WFCCIMService * sharedSingleton = nil;
 
 static void fillTMessageContent(mars::stn::TMessageContent &tmsgcontent, WFCCMessageContent *content) {
     WFCCMessagePayload *payload = [content encode];
+    if(!payload.contentType) {
+        NSLog(@"****************************************");
+        NSLog(@"Error, message content net set content type %@", content.class);
+        NSLog(@"****************************************");
+    }
     payload.extra = content.extra;
     tmsgcontent.type = payload.contentType;
     tmsgcontent.searchableContent = [payload.searchableContent UTF8String] ? [payload.searchableContent UTF8String] : "";
@@ -1622,25 +1629,20 @@ WFCCGroupInfo *convertProtoGroupInfo(const mars::stn::TGroupInfo &tgi) {
 
     [condition lock];
     [[WFCCIMService sharedWFCIMService] uploadMedia:fileName mediaData:mediaData mediaType:mediaType success:^(NSString *remoteUrl) {
+        successBlock(remoteUrl);
+        
         success = YES;
         [condition lock];
         [condition signal];
         [condition unlock];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            successBlock(remoteUrl);
-        });
     } progress:^(long uploaded, long total) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            progressBlock(uploaded, total);
-        });
+        progressBlock(uploaded, total);
     } error:^(int error_code) {
+        errorBlock(error_code);
         success = NO;
         [condition lock];
         [condition signal];
         [condition unlock];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            errorBlock(error_code);
-        });
     }];
     
     [condition wait];
@@ -2597,6 +2599,11 @@ public:
     int contenttype;
     if (class_getClassMethod(contentClass, @selector(getContentType))) {
         contenttype = [contentClass getContentType];
+        if(self.MessageContentMaps[@(contenttype)]) {
+            NSLog(@"****************************************");
+            NSLog(@"Error, duplicate message content type %d", contenttype);
+            NSLog(@"****************************************");
+        }
         self.MessageContentMaps[@(contenttype)] = contentClass;
         int contentflag = [contentClass getContentFlags];
         mars::stn::MessageDB::Instance()->RegisterMessageFlag(contenttype, contentflag);

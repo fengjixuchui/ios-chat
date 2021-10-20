@@ -76,8 +76,6 @@
 #import "WFCUCompositeMessageViewController.h"
 
 #import "WFCUFavoriteItem.h"
-
-#import "WFCUPushToTalkViewController.h"
 #import "WFCUUploadBigFilesViewController.h"
 
 #import "WFCUUtilities.h"
@@ -1808,12 +1806,6 @@
             WFCUConferenceViewController *vc = [[WFCUConferenceViewController alloc] initWithInvite:invite];
             [[WFAVEngineKit sharedEngineKit] presentViewController:vc];
         }
-    } else if([model.message.content isKindOfClass:[WFCCPTTInviteMessageContent class]]) {
-        if ([WFAVEngineKit sharedEngineKit].supportConference) {
-            WFCCPTTInviteMessageContent *invite = (WFCCPTTInviteMessageContent *)model.message.content;
-            WFCUPushToTalkViewController *vc = [[WFCUPushToTalkViewController alloc] initWithInvite:invite];
-            [[WFAVEngineKit sharedEngineKit] presentViewController:vc];
-        }
     } else if([model.message.content isKindOfClass:[WFCCCardMessageContent class]]) {
         WFCCCardMessageContent *card = (WFCCCardMessageContent *)model.message.content;
         
@@ -1849,6 +1841,15 @@
         WFCUBrowserViewController *bvc = [[WFCUBrowserViewController alloc] init];
         bvc.url = content.url;
         [self.navigationController pushViewController:bvc animated:YES];
+    } else if([model.message.content isKindOfClass:WFCCPTTInviteMessageContent.class]) {
+        WFCCPTTInviteMessageContent *invite = (WFCCPTTInviteMessageContent *)model.message.content;
+        if(NSClassFromString(@"WFPttChannelViewController")) {
+            UIViewController *vc = [[NSClassFromString(@"WFPttChannelViewController") alloc] init];
+            if([vc respondsToSelector:@selector(setChannelId:)]) {
+                [vc performSelector:@selector(setChannelId:) withObject:invite.callId];
+            }
+            [self.navigationController pushViewController:vc animated:YES];
+        }
     }
 }
 
