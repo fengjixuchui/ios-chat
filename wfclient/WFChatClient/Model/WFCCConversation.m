@@ -25,4 +25,17 @@
     }
     return NO;
 }
+
+- (NSUInteger)hash {
+    return self.target.hash;
+}
+
+#pragma mark - NSCopying
+- (id)copyWithZone:(nullable NSZone *)zone {
+    WFCCConversation *conversation = [[WFCCConversation alloc] init];
+    conversation.type = self.type;
+    conversation.target = self.target;
+    conversation.line = self.line;
+    return conversation;
+}
 @end

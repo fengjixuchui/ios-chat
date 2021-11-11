@@ -16,7 +16,9 @@
 #import <WFMomentClient/WFMomentClient.h>
 #import <WFMomentUIKit/WFMomentUIKit.h>
 #endif
+#if WFCU_SUPPORT_VOIP
 #import <WFAVEngineKit/WFAVEngineKit.h>
+#endif
 #import "UIFont+YH.h"
 #import "UIColor+YH.h"
 
@@ -44,17 +46,11 @@
     } else {
         self.hasMoments = NO;
     }
-    
+#if WFCU_SUPPORT_VOIP
     if ([WFAVEngineKit sharedEngineKit].supportConference) {
         [self.dataSource addObject:@{@"title":LocalizedString(@"Conference"),@"image":@"discover_conference",@"des":@"Conference"}];
     }
-#ifdef WFC_PTT
-    if(NSClassFromString(@"WFPttClient") &&
-       NSClassFromString(@"WFPttChannelListViewController")) {
-        [self.dataSource addObject:@{@"title":@"对讲机",@"image":@"discover_intercom",@"des":@"Push to Talk"}];
-    }
-#endif //WFC_PTT
-    
+#endif
     self.tableView = [[UITableView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height) style:UITableViewStylePlain];
     self.tableView.delegate = self;
     self.tableView.dataSource = self;
@@ -159,13 +155,6 @@
         vc.hidesBottomBarWhenPushed = YES;
         [self.navigationController pushViewController:vc animated:YES];
     }
-#ifdef WFC_PTT
-    if ([des isEqualToString:@"Push to Talk"]) {
-        UIViewController *vc = [[NSClassFromString(@"WFPttChannelListViewController") alloc] init];
-        vc.hidesBottomBarWhenPushed = YES;
-        [self.navigationController pushViewController:vc animated:YES];
-    }
-#endif //WFC_PTT
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {

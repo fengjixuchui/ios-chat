@@ -25,8 +25,6 @@
 #import "WFCUCardCell.h"
 #import "WFCUCompositeCell.h"
 #import "WFCULinkCell.h"
-#import "WFCUPTTInviteCell.h"
-
 
 #import "WFCUBrowserViewController.h"
 #import <WFChatClient/WFCChatClient.h>
@@ -791,8 +789,6 @@
     [self registerCell:[WFCUCardCell class] forContent:[WFCCCardMessageContent class]];
     [self registerCell:[WFCUCompositeCell class] forContent:[WFCCCompositeMessageContent class]];
     [self registerCell:[WFCULinkCell class] forContent:[WFCCLinkMessageContent class]];
-    [self registerCell:[WFCUPTTInviteCell class] forContent:[WFCCPTTInviteMessageContent class]];
-    
     
     [self.collectionView registerClass:[UICollectionReusableView class] forSupplementaryViewOfKind:UICollectionElementKindSectionHeader withReuseIdentifier:@"HeaderView"];
     [self.collectionView registerClass:[UICollectionReusableView class] forSupplementaryViewOfKind:UICollectionElementKindSectionFooter withReuseIdentifier:@"FooterView"];
@@ -1141,7 +1137,7 @@
 - (void)onSendingMessage:(NSNotification *)notification {
     WFCCMessage *message = [notification.userInfo objectForKey:@"message"];
     WFCCMessageStatus status = [[notification.userInfo objectForKey:@"status"] integerValue];
-    if (status == Message_Status_Sending) {
+    if (status == Message_Status_Sending && message.messageId > 0) {
         if ([message.conversation isEqual:self.conversation]) {
             [self appendMessages:@[message] newMessage:YES highlightId:0 forceButtom:YES];
         }
@@ -1801,11 +1797,13 @@
             [self startPlay:model];
         }
     } else if([model.message.content isKindOfClass:[WFCCConferenceInviteMessageContent class]]) {
+#if WFCU_SUPPORT_VOIP
         if ([WFAVEngineKit sharedEngineKit].supportConference) {
             WFCCConferenceInviteMessageContent *invite = (WFCCConferenceInviteMessageContent *)model.message.content;   
             WFCUConferenceViewController *vc = [[WFCUConferenceViewController alloc] initWithInvite:invite];
             [[WFAVEngineKit sharedEngineKit] presentViewController:vc];
         }
+#endif
     } else if([model.message.content isKindOfClass:[WFCCCardMessageContent class]]) {
         WFCCCardMessageContent *card = (WFCCCardMessageContent *)model.message.content;
         
@@ -1841,15 +1839,6 @@
         WFCUBrowserViewController *bvc = [[WFCUBrowserViewController alloc] init];
         bvc.url = content.url;
         [self.navigationController pushViewController:bvc animated:YES];
-    } else if([model.message.content isKindOfClass:WFCCPTTInviteMessageContent.class]) {
-        WFCCPTTInviteMessageContent *invite = (WFCCPTTInviteMessageContent *)model.message.content;
-        if(NSClassFromString(@"WFPttChannelViewController")) {
-            UIViewController *vc = [[NSClassFromString(@"WFPttChannelViewController") alloc] init];
-            if([vc respondsToSelector:@selector(setChannelId:)]) {
-                [vc performSelector:@selector(setChannelId:) withObject:invite.callId];
-            }
-            [self.navigationController pushViewController:vc animated:YES];
-        }
     }
 }
 
@@ -2133,7 +2122,7 @@
     
 }
 #pragma mark - ChatInputBarDelegate
-- (void)imageDidCapture:(UIImage *)capturedImage {
+- (void)imageDidCapture:(UIImage *)capturedImage fullImage:(BOOL)fullImage{
     if (!capturedImage) {
         return;
     }
@@ -2144,7 +2133,7 @@
     NSString *path = [cacheDir stringByAppendingPathComponent:[NSString stringWithFormat:@"img%lld.jpg", recordTime++]];
         
         
-    WFCCImageMessageContent *imgContent = [WFCCImageMessageContent contentFrom:capturedImage cachePath:path];
+    WFCCImageMessageContent *imgContent = [WFCCImageMessageContent contentFrom:capturedImage cachePath:path fullImage:fullImage];
     [self sendMessage:imgContent];
 }
 

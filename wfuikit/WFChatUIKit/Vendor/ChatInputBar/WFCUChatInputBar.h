@@ -33,7 +33,7 @@
 - (void)recordDidBegin;
 - (void)recordDidCancel;
 - (void)recordDidEnd:(NSString *)dataUri duration:(long)duration error:(NSError *)error;
-- (void)imageDidCapture:(UIImage *)image;
+- (void)imageDidCapture:(UIImage *)image fullImage:(BOOL)fullImage;
 - (void)videoDidCapture:(NSString *) videoPath thumbnail:(UIImage *)image duration:(long)duration;
 - (void)sightDidFinishRecord:(NSString*)url thumbnail:(UIImage*)image duration:(NSUInteger)duration;
 - (void)locationDidSelect:(CLLocationCoordinate2D)location locationName:(NSString *)locationName mapScreenShot:(UIImage *)mapScreenShot;
@@ -61,7 +61,10 @@ typedef NS_ENUM(NSInteger, ChatInputBarStatus) {
     ChatInputBarEmojiStatus,
     ChatInputBarRecordStatus,
     ChatInputBarPublicStatus,
-    ChatInputBarMuteStatus
+    ChatInputBarMuteStatus,
+#ifdef WFC_PTT
+    ChatInputBarPttStatus
+#endif
 };
 
 @class WFCCConversation;
