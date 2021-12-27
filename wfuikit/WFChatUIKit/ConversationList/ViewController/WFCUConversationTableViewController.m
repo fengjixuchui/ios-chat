@@ -562,6 +562,10 @@
             self.pcSessionLabel.text = @"Web 已登录";
         } else if(infos[0].platform == PlatformType_WX) {
             self.pcSessionLabel.text = @"小程序已登录";
+        } else if(infos[0].platform == PlatformType_iPad) {
+            self.pcSessionLabel.text = @"iPad 已登录";
+        } else if(infos[0].platform == PlatformType_APad) {
+            self.pcSessionLabel.text = @"Android 平板已登录";
         }
         if(self.pcSessionLabel.text.length && [[WFCCIMService sharedWFCIMService] isMuteNotificationWhenPcOnline]) {
             self.pcSessionLabel.text = [self.pcSessionLabel.text stringByAppendingString:@"，手机通知已关闭"];
@@ -910,6 +914,16 @@
 
 - (NSArray<UITableViewRowAction *> *)tableView:(UITableView *)tableView editActionsForRowAtIndexPath:(NSIndexPath *)indexPath {
     __weak typeof(self) ws = self;
+    UITableViewRowAction *markAsUnread = [UITableViewRowAction rowActionWithStyle:UITableViewRowActionStyleNormal title:WFCString(@"MarkAsUnread") handler:^(UITableViewRowAction * _Nonnull action, NSIndexPath * _Nonnull indexPath) {
+        [[WFCCIMService sharedWFCIMService] markAsUnRead:ws.conversations[indexPath.row].conversation syncToOtherClient:YES];
+        [ws refreshList];
+    }];
+    
+    UITableViewRowAction *clearUnread = [UITableViewRowAction rowActionWithStyle:UITableViewRowActionStyleNormal title:WFCString(@"MarkAsRead") handler:^(UITableViewRowAction * _Nonnull action, NSIndexPath * _Nonnull indexPath) {
+        [[WFCCIMService sharedWFCIMService] clearUnreadStatus:ws.conversations[indexPath.row].conversation];
+        [ws refreshList];
+    }];
+    
     UITableViewRowAction *delete = [UITableViewRowAction rowActionWithStyle:UITableViewRowActionStyleNormal title:WFCString(@"Delete") handler:^(UITableViewRowAction * _Nonnull action, NSIndexPath * _Nonnull indexPath) {
         [[WFCCIMService sharedWFCIMService] clearUnreadStatus:ws.conversations[indexPath.row].conversation];
         [[WFCCIMService sharedWFCIMService] removeConversation:ws.conversations[indexPath.row].conversation clearMessage:YES];
@@ -944,15 +958,32 @@
         [self refreshList];
     }];
     
-    
-    
     setTop.backgroundColor = [UIColor purpleColor];
     setUntop.backgroundColor = [UIColor orangeColor];
+    clearUnread.backgroundColor = [UIColor blueColor];
+    markAsUnread.backgroundColor = [UIColor blueColor];
     
-    if (self.conversations[indexPath.row].isTop) {
-        return @[delete, setUntop ];
+    if(self.conversations[indexPath.row].unreadCount.unread) {
+        if (self.conversations[indexPath.row].isTop) {
+            return @[delete, setUntop, clearUnread];
+        } else {
+            return @[delete, setTop, clearUnread];
+        }
     } else {
-        return @[delete, setTop];
+        NSArray<WFCCMessage *> *readedMsgs = [[WFCCIMService sharedWFCIMService] getMessages:self.conversations[indexPath.row].conversation messageStatus:@[@(Message_Status_Readed), @(Message_Status_Played)] from:0 count:1 withUser:nil];
+        if(readedMsgs.count) {
+            if (self.conversations[indexPath.row].isTop) {
+                return @[delete, setUntop, markAsUnread];
+            } else {
+                return @[delete, setTop, markAsUnread];
+            }
+        } else {
+            if (self.conversations[indexPath.row].isTop) {
+                return @[delete, setUntop];
+            } else {
+                return @[delete, setTop];
+            }
+        }
     }
 };
 

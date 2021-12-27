@@ -14,12 +14,12 @@
 #import "WFAVEngineKit_Import.h"
 
 #import "app_callback.h"
-#include <mars/baseevent/base_logic.h>
-#include <mars/xlog/xlogger.h>
-#include <mars/xlog/xloggerbase.h>
-#include <mars/xlog/appender.h>
-#include <mars/proto/proto.h>
-#include <mars/stn/stn_logic.h>
+#include <baseevent/base_logic.h>
+#include <xlog/xlogger.h>
+#include <xlog/xloggerbase.h>
+#include <xlog/appender.h>
+#include <proto/proto.h>
+#include <stn/stn_logic.h>
 #include <list>
 #import "WFCCIMService.h"
 #import "WFCCNetworkStatus.h"
@@ -277,6 +277,13 @@ NSMutableDictionary *convertTFeed(const mars::stn::TMomentsFeed &tfeed) {
         }
         [dataDict setObject:entrys forKey:@"ex"];
     }
+    if (!tfeed.mentionedUsers.empty()) {
+        NSMutableArray *entrys = [[NSMutableArray alloc] init];
+        for (std::list<std::string>::const_iterator it2 = tfeed.mentionedUsers.begin(); it2 != tfeed.mentionedUsers.end(); ++it2) {
+            [entrys addObject:[NSString stringWithUTF8String:it2->c_str()]];
+        }
+        [dataDict setObject:entrys forKey:@"mu"];
+    }
     
     if (!tfeed.extra.empty()) {
         [dataDict setObject:[NSString stringWithUTF8String:tfeed.extra.c_str()] forKey:@"extra"];
@@ -497,24 +504,37 @@ static WFCCNetworkService * sharedSingleton = nil;
         }
     });
 }
-- (void)onReceiveMessage:(NSArray<WFCCMessage *> *)messages hasMore:(BOOL)hasMore {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSMutableArray *messageList = [messages mutableCopy];
-        for (WFCCMessage *message in messages) {
-            for (id<ReceiveMessageFilter> filter in self.messageFilterList) {
-                @try {
-                    if ([filter onReceiveMessage:message]) {
-                        [messageList removeObject:message];
-                        break;
-                    }
-                } @catch (NSException *exception) {
-                    NSLog(@"%@", exception);
+
+- (NSArray<WFCCMessage *> *)filterReceiveMessage:(NSArray<WFCCMessage *> *)messages hasMore:(BOOL)hasMore {
+    NSMutableArray *messageList = [messages mutableCopy];
+    for (WFCCMessage *message in messages) {
+        for (id<ReceiveMessageFilter> filter in self.messageFilterList) {
+            @try {
+                if ([filter onReceiveMessage:message]) {
+                    [messageList removeObject:message];
                     break;
                 }
-                
+            } @catch (NSException *exception) {
+                NSLog(@"%@", exception);
+                break;
             }
+            
         }
-        
+    }
+    return [messageList copy];
+}
+
+- (void)onReceiveMessage:(NSArray<WFCCMessage *> *)messages hasMore:(BOOL)hasMore {
+    __block NSArray<WFCCMessage *> *messageList;
+    if (strcmp(dispatch_queue_get_label(DISPATCH_CURRENT_QUEUE_LABEL), dispatch_queue_get_label(dispatch_get_main_queue())) == 0) {
+        messageList = [self filterReceiveMessage:messages hasMore:hasMore];
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            messageList = [self filterReceiveMessage:messages hasMore:hasMore];
+        });
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
         [[NSNotificationCenter defaultCenter] postNotificationName:kReceiveMessages object:messageList];
         [self.receiveMessageDelegate onReceiveMessage:messageList hasMore:hasMore];
     });
@@ -602,6 +622,7 @@ static WFCCNetworkService * sharedSingleton = nil;
         @synchronized (self) {
             if (sharedSingleton == nil) {
                 sharedSingleton = [[WFCCNetworkService alloc] init];
+                [sharedSingleton addReceiveMessageFilter:[WFCCIMService sharedWFCIMService]];
             }
         }
     }
@@ -1026,6 +1047,10 @@ static WFCCNetworkService * sharedSingleton = nil;
 
 - (void)setProtoUserAgent:(NSString *)userAgent {
     mars::stn::setUserAgent([userAgent UTF8String]);
+}
+
+- (void)addHttpHeader:(NSString *)header value:(NSString *)value {
+    mars::stn::addHttpHeader([header UTF8String], value.length ? [value UTF8String] : "");
 }
 
 - (void)setVoipDeviceToken:(NSString *)token {

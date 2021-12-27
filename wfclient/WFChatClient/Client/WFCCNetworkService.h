@@ -69,8 +69,12 @@ typedef NS_ENUM(NSInteger, ConnectionStatus) {
  //Platform_OSX = 4,
  //Platform_WEB = 5,
  //Platform_WX = 6,
+ //Platform_Linux = 7,
+ //Platform_iPad = 8,
+ //Platform_APad = 9,
 */
 #define Platform_iOS 1
+#define Platform_iPad 8
 
     
 #pragma mark - 连接状态&消息监听
@@ -303,6 +307,14 @@ typedef NS_ENUM(NSInteger, ConnectionStatus) {
  @param userAgent  User agent
  */
 - (void)setProtoUserAgent:(NSString *)userAgent;
+
+/*
+ 添加协议栈短连接自定义header，value为空时清除该header。
+ 
+ @param header header
+ @param value  value
+ */
+- (void)addHttpHeader:(NSString *)header value:(NSString *)value;
 @end
 
 #endif
