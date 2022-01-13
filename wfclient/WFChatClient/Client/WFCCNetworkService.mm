@@ -80,7 +80,17 @@ public:
   id<ConnectionStatusDelegate> m_delegate;
 };
 
-
+class CTSCB : public mars::stn::NotifyConnectToServerCallback {
+public:
+    CTSCB(id<ConnectToServerDelegate> delegate) : m_delegate(delegate) {
+  }
+    void OnConnectToServer(const std::string &host, const std::string &ip, int port) {
+    if (m_delegate) {
+        [m_delegate onConnectToServer:[NSString stringWithUTF8String:host.c_str()] ip:[NSString stringWithUTF8String:ip.c_str()] port:port];
+    }
+  }
+  id<ConnectToServerDelegate> m_delegate;
+};
 
 class RPCB : public mars::stn::ReceiveMessageCallback {
 public:
@@ -416,7 +426,7 @@ public:
 
 
 
-@interface WFCCNetworkService () <ConnectionStatusDelegate, ReceiveMessageDelegate, RefreshUserInfoDelegate, RefreshGroupInfoDelegate, WFCCNetworkStatusDelegate, RefreshFriendListDelegate, RefreshFriendRequestDelegate, RefreshSettingDelegate, RefreshChannelInfoDelegate, RefreshGroupMemberDelegate, ConferenceEventDelegate>
+@interface WFCCNetworkService () <ConnectionStatusDelegate, ReceiveMessageDelegate, RefreshUserInfoDelegate, RefreshGroupInfoDelegate, WFCCNetworkStatusDelegate, RefreshFriendListDelegate, RefreshFriendRequestDelegate, RefreshSettingDelegate, RefreshChannelInfoDelegate, RefreshGroupMemberDelegate, ConferenceEventDelegate, ConnectToServerDelegate>
 @property(nonatomic, assign)ConnectionStatus currentConnectionStatus;
 @property (nonatomic, strong)NSString *userId;
 @property (nonatomic, strong)NSString *passwd;
@@ -438,6 +448,8 @@ public:
 - (void)reportEvent_OnForeground:(BOOL)isForeground;
 
 @property(nonatomic, assign)NSUInteger backgroudRunTime;
+
+@property(nonatomic, assign)BOOL firstTimeResume;
 @end
 
 @implementation WFCCNetworkService
@@ -617,12 +629,19 @@ static WFCCNetworkService * sharedSingleton = nil;
     
 }
 
+- (void)onConnectToServer:(NSString *)host ip:(NSString *)ip port:(int)port {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.connectToServerDelegate onConnectToServer:host ip:ip port:port];
+    });
+}
+
 + (WFCCNetworkService *)sharedInstance {
     if (sharedSingleton == nil) {
         @synchronized (self) {
             if (sharedSingleton == nil) {
                 sharedSingleton = [[WFCCNetworkService alloc] init];
                 [sharedSingleton addReceiveMessageFilter:[WFCCIMService sharedWFCIMService]];
+                sharedSingleton.firstTimeResume = YES;
             }
         }
     }
@@ -765,6 +784,13 @@ static WFCCNetworkService * sharedSingleton = nil;
   if (!_logined) {
     return;
   }
+    
+  //首次启动也会有Resume事件，这里需要忽略，不然会启动后连接成功后再重新连接。
+  if(_firstTimeResume) {
+    _firstTimeResume = NO;
+    return;
+  }
+    
   [self reportEvent_OnForeground:YES];
   mars::baseevent::OnNetworkChange();
   mars::stn::MakesureLonglinkConnected();
@@ -782,14 +808,15 @@ static WFCCNetworkService * sharedSingleton = nil;
 - (void) createMars {
   mars::app::SetCallback(mars::app::AppCallBack::Instance());
   mars::stn::setConnectionStatusCallback(new CSCB(self));
+  mars::stn::setNotifyConnectToServerCallback(new CTSCB(self));
   mars::stn::setReceiveMessageCallback(new RPCB(self));
-    mars::stn::setConferenceEventCallback(new CONFCB(self));
+  mars::stn::setConferenceEventCallback(new CONFCB(self));
   mars::stn::setRefreshUserInfoCallback(new GUCB(self));
   mars::stn::setRefreshGroupInfoCallback(new GGCB(self));
-    mars::stn::setRefreshGroupMemberCallback(new GGMCB(self));
+  mars::stn::setRefreshGroupMemberCallback(new GGMCB(self));
   mars::stn::setRefreshChannelInfoCallback(new GCHCB(self));
   mars::stn::setRefreshFriendListCallback(new GFLCB(self));
-    mars::stn::setRefreshFriendRequestCallback(new GFRCB(self));
+  mars::stn::setRefreshFriendRequestCallback(new GFRCB(self));
   mars::stn::setRefreshSettingCallback(new GSCB(self));
   mars::baseevent::OnCreate();
 }
@@ -933,19 +960,24 @@ static WFCCNetworkService * sharedSingleton = nil;
 - (NSString *)getClientId {
     //当应用在appstore上架后，开发者账户下的所有应用在同一个手机上具有相同的vendor id。详情请参考(IDFV(identifierForVendor)使用陷阱)https://easeapi.com/blog/blog/63-ios-idfv.html
     //这样如果同一个IM服务有多个应用，多个应用安装到同一个手机上，这样所有应用将具有相同的clientId，导致互踢现象产生。
-    //处理办法就是不使用identifierForVendor，随机生成UUID，然后固定使用这个UUID就行了，请参考下面注释掉的代码
-    /*
+    //处理办法就是不使用identifierForVendor，随机生成UUID，然后固定使用这个UUID就行了.
+    //下面这段代码会尝试兼容之前的vendorId，如果没有在userdefaults保持clientid，则去检查一下是否有以vendorId为子目录的数据库目录存在，如果存在就以vendorid为clientid，如果不存在就使用uuid。
+    
     NSString *clientId = [[NSUserDefaults standardUserDefaults] objectForKey:WFC_CLIENT_ID];
     if(!clientId.length) {
-        CFUUIDRef uuidObject = CFUUIDCreate(kCFAllocatorDefault);
-        clientId = (NSString *)CFBridgingRelease(CFUUIDCreateString(kCFAllocatorDefault, uuidObject));
-        CFRelease(uuidObject);
+        NSString *vendorId = [UIDevice currentDevice].identifierForVendor.UUIDString;
+        if(mars::app::AppCallBack::Instance()->isDBAlreadyCreated([vendorId UTF8String])) {
+            clientId = vendorId;
+        } else {
+            CFUUIDRef uuidObject = CFUUIDCreate(kCFAllocatorDefault);
+            clientId = (NSString *)CFBridgingRelease(CFUUIDCreateString(kCFAllocatorDefault, uuidObject));
+            CFRelease(uuidObject);
+        }
+        
         [[NSUserDefaults standardUserDefaults] setObject:clientId forKey:WFC_CLIENT_ID];
         [[NSUserDefaults standardUserDefaults] synchronize];
     }
     return clientId;
-     */
-    return [UIDevice currentDevice].identifierForVendor.UUIDString;
 }
 
 - (BOOL)connect:(NSString *)userId token:(NSString *)token {

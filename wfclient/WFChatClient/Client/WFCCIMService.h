@@ -593,6 +593,24 @@ typedef NS_ENUM(NSInteger, WFCCPlatformType) {
                                    offset:(int)offset;
 
 /**
+ 搜索消息
+ 
+ @param conversation 会话，如果为空将搜索所有会话
+ @param keyword 关键词
+ @param contentTypes 过滤的消息类型
+ @param desc order
+ @param offset offset
+ @param limit limit
+ @return 命中的消息
+ */
+- (NSArray<WFCCMessage *> *)searchMessage:(WFCCConversation *)conversation
+                                  keyword:(NSString *)keyword
+                             contentTypes:(NSArray<NSNumber *> *)contentTypes
+                                    order:(BOOL)desc
+                                    limit:(int)limit
+                                   offset:(int)offset;
+
+/**
  获取某类会话信息
  
  @param conversationTypes 会话类型
@@ -811,6 +829,25 @@ typedef NS_ENUM(NSInteger, WFCCPlatformType) {
  @param errorBlock 删除失败
  */
 - (void)deleteRemoteMessage:(long long)messageUid
+                    success:(void(^)(void))successBlock
+                      error:(void(^)(int error_code))errorBlock;
+
+/**
+ 更新远端消息，仅专业版支持。
+ 
+ @discussion 客户端仅能更新自己发送的消息，更新的消息类型不能变，更新的消息类型是服务配置允许更新的内容。Server API更新则没有限制。
+ 
+ @param messageUid 消息UID
+ @param content 更新消息内容
+ @param distribute 是否分发到其他客户端
+ @param updateLocal 是否更新本地消息内容
+ @param successBlock 删除成功
+ @param errorBlock 删除失败
+ */
+- (void)updateRemoteMessage:(long long)messageUid
+                    content:(WFCCMessageContent *)content
+                 distribute:(BOOL)distribute
+                updateLocal:(BOOL)updateLocal
                     success:(void(^)(void))successBlock
                       error:(void(^)(int error_code))errorBlock;
 

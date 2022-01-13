@@ -1943,6 +1943,19 @@ WFCCGroupInfo *convertProtoGroupInfo(const mars::stn::TGroupInfo &tgi) {
     mars::stn::deleteRemoteMessage(messageUid, new IMGeneralOperationCallback(successBlock, errorBlock));
 }
 
+- (void)updateRemoteMessage:(long long)messageUid
+                    content:(WFCCMessageContent *)content
+                 distribute:(BOOL)distribute
+                updateLocal:(BOOL)updateLocal
+                    success:(void(^)(void))successBlock
+                      error:(void(^)(int error_code))errorBlock {
+    
+    mars::stn::TMessageContent tcontent;
+    fillTMessageContent(tcontent, content);
+        
+    mars::stn::updateRemoteMessageContent(messageUid, tcontent, distribute, updateLocal, new IMGeneralOperationCallback(successBlock, errorBlock));
+}
+
 - (NSArray<WFCCConversationSearchInfo *> *)searchConversation:(NSString *)keyword inConversation:(NSArray<NSNumber *> *)conversationTypes lines:(NSArray<NSNumber *> *)lines {
     if (keyword.length == 0) {
         return nil;
@@ -1991,6 +2004,23 @@ WFCCGroupInfo *convertProtoGroupInfo(const mars::stn::TGroupInfo &tgi) {
     return convertProtoMessageList(tmessages, YES);
 }
 
+- (NSArray<WFCCMessage *> *)searchMessage:(WFCCConversation *)conversation
+                                  keyword:(NSString *)keyword
+                             contentTypes:(NSArray<NSNumber *> *)contentTypes
+                                    order:(BOOL)desc
+                                    limit:(int)limit
+                                   offset:(int)offset {
+    if (keyword.length == 0 && contentTypes.count == 0) {
+        return nil;
+    }
+    std::list<int> types;
+    for (NSNumber *num in contentTypes) {
+        types.push_back(num.intValue);
+    }
+    
+    std::list<mars::stn::TMessage> tmessages = mars::stn::MessageDB::Instance()->SearchMessagesByTypes((int)conversation.type, conversation.target ? [conversation.target UTF8String] : "", conversation.line, [keyword UTF8String], types, desc ? true : false, limit, offset);
+    return convertProtoMessageList(tmessages, YES);
+}
 - (NSArray<WFCCMessage *> *)searchMessage:(NSArray<NSNumber *> *)conversationTypes
                                     lines:(NSArray<NSNumber *> *)lines
                              contentTypes:(NSArray<NSNumber *> *)contentTypes
