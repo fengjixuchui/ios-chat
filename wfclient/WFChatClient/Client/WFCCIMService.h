@@ -134,7 +134,10 @@ typedef NS_ENUM(NSInteger, UserSettingScope) {
     UserSettingScope_Disable_Sync_Draft = 20,
     //不能直接使用，协议栈内会使用此值
     UserSettingScope_Voip_Silent = 21,
-    
+    //不能直接使用，协议栈内会使用此值
+    UserSettingScope_PTT_Reserved = 22,
+    //不能直接使用，协议栈内会使用此值
+    UserSettingScope_Custom_State = 23,
     
     //自定义用户设置，请使用1000以上的key
     UserSettingScope_Custom_Begin = 1000
@@ -202,6 +205,8 @@ typedef NS_ENUM(NSInteger, WFCCPlatformType) {
 @end
 
 @protocol ReceiveMessageFilter;
+@class WFCCUserOnlineState;
+@class WFCCUserCustomState;
 
 #pragma mark - IM服务
 
@@ -607,6 +612,28 @@ typedef NS_ENUM(NSInteger, WFCCPlatformType) {
 - (NSArray<WFCCMessage *> *)searchMessage:(WFCCConversation *)conversation
                                   keyword:(NSString *)keyword
                              contentTypes:(NSArray<NSNumber *> *)contentTypes
+                                    order:(BOOL)desc
+                                    limit:(int)limit
+                                   offset:(int)offset;
+
+/**
+ 搜索消息
+ 
+ @param conversation 会话，如果为空将搜索所有会话
+ @param keyword 关键词
+ @param contentTypes 过滤的消息类型
+ @param startTime 消息的开始时间，单位为毫秒，如果不需要开始时间请用0。
+ @param endTime 消息的结束时间，单位为毫秒，如果不需要结束时间请用0.。
+ @param desc order
+ @param offset offset
+ @param limit limit
+ @return 命中的消息
+ */
+- (NSArray<WFCCMessage *> *)searchMessage:(WFCCConversation *)conversation
+                                  keyword:(NSString *)keyword
+                             contentTypes:(NSArray<NSNumber *> *)contentTypes
+                                startTime:(int64_t)startTime
+                                  endTime:(int64_t)endTime
                                     order:(BOOL)desc
                                     limit:(int)limit
                                    offset:(int)offset;
@@ -2006,6 +2033,29 @@ amr文件转成wav数据
 - (BOOL)isGlobalDisableSyncDraft;
 
 /*
+ 获取用户的在线状态
+ */
+- (WFCCUserOnlineState *)getUserOnlineState:(NSString *)userId;
+
+- (WFCCUserCustomState *)getMyCustomState;
+
+- (void)setMyCustomState:(WFCCUserCustomState *)state
+                 success:(void(^)(void))successBlock
+                   error:(void(^)(int error_code))errorBlock;
+
+- (void)watchOnlineState:(WFCCConversationType)conversationType
+                 targets:(NSArray<NSString *> *)targets
+                duration:(int)watchDuration
+                 success:(void(^)(NSArray<WFCCUserOnlineState *> *states))successBlock
+                   error:(void(^)(int error_code))errorBlock;
+
+- (void)unwatchOnlineState:(WFCCConversationType)conversationType
+                   targets:(NSArray<NSString *> *)targets
+                   success:(void(^)(void))successBlock
+                     error:(void(^)(int error_code))errorBlock;
+
+- (BOOL)isEnableUserOnlineState;
+/*
  音视频会议相关
  */
 - (void)sendConferenceRequest:(long long)sessionId
@@ -2031,4 +2081,7 @@ amr文件转成wav数据
 - (void)releaseLock:(NSString *)lockId
             success:(void(^)(void))successBlock
               error:(void(^)(int error_code))errorBlock;
+
+//内部调用，请勿使用
+- (void)putUseOnlineStates:(NSArray<WFCCUserOnlineState *> *)states;
 @end
