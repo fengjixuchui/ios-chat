@@ -60,6 +60,7 @@
     [WFCCNetworkService sharedInstance].receiveMessageDelegate = self;
     [[WFCCNetworkService sharedInstance] setServerAddress:IM_SERVER_HOST];
     [[WFCCNetworkService sharedInstance] setBackupAddressStrategy:0];
+//    [[WFCCNetworkService sharedInstance] setProxyInfo:nil ip:@"192.168.1.80" port:1080 username:nil password:nil];
 //    [[WFCCNetworkService sharedInstance] setBackupAddress:@"192.168.1.120" port:80];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onFriendRequestUpdated:) name:kFriendRequestUpdated object:nil];
     
@@ -68,12 +69,14 @@
     //[[WFCCIMService sharedWFCIMService] setDefaultSilentWhenPcOnline:NO];
 
 #if WFCU_SUPPORT_VOIP
+    //设置不注册voip推送服务，需要在sharedEngineKit方法之前调用
+//    [WFAVEngineKit notRegisterVoipPushService];
     //音视频高级版不需要stun/turn服务，请注释掉下面这行。单人版和多人版需要turn服务，请自己部署然后修改配置文件。
     [[WFAVEngineKit sharedEngineKit] addIceServer:ICE_ADDRESS userName:ICE_USERNAME password:ICE_PASSWORD];
     
     [[WFAVEngineKit sharedEngineKit] setVideoProfile:kWFAVVideoProfile360P swapWidthHeight:YES];
     [WFAVEngineKit sharedEngineKit].delegate = self;
-//    [WFAVEngineKit sharedEngineKit].screenSharingReplaceMode = YES;
+    [WFAVEngineKit sharedEngineKit].screenSharingReplaceMode = YES;
     
     // 设置音视频参与者数量。多人音视频默认视频4路，音频9路，如果改成更多可能会导致问题；音视频高级版默认视频9路，音频16路。
 //    [WFAVEngineKit sharedEngineKit].maxVideoCallCount = 4;
