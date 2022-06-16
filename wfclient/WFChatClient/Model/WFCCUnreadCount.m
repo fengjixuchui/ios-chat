@@ -16,4 +16,12 @@
     count.unreadMentionAll = mentionAll;
     return count;
 }
+
+-(id)toJsonObj {
+    NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
+    dict[@"unread"] = @(self.unread);
+    dict[@"unreadMention"] = @(self.unreadMention);
+    dict[@"unreadMentionAll"] = @(self.unreadMentionAll);
+    return dict;
+}
 @end

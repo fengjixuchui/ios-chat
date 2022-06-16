@@ -44,9 +44,9 @@
                                                                options:kNilOptions
                                                                  error:&__error];
     if (!__error) {
-        self.contentDigest = dictionary[@"d"];
-        self.url = dictionary[@"u"];
-        self.thumbnailUrl = dictionary[@"t"];
+        self.contentDigest = [self getString:dictionary ofKey:@"d"];
+        self.url = [self getString:dictionary ofKey:@"u"];
+        self.thumbnailUrl = [self getString:dictionary ofKey:@"t"];
     }
 }
 

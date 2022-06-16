@@ -72,6 +72,14 @@
     } else if(self.conversation.type == Channel_Type) {
         self.channelInfo = [[WFCCIMService sharedWFCIMService] getChannelInfo:self.conversation.target refresh:YES];
         self.memberList = @[self.conversation.target];
+    } else if(self.conversation.type == SecretChat_Type) {
+        WFCCSecretChatInfo *secretChatInfo = [[WFCCIMService sharedWFCIMService] getSecretChatInfo:self.conversation.target];
+        if(!secretChatInfo) {
+            [self.navigationController popViewControllerAnimated:YES];
+        }
+        NSString *userId = [[WFCCIMService sharedWFCIMService] getSecretChatInfo:self.conversation.target].userId;
+        self.userInfo = [[WFCCIMService sharedWFCIMService] getUserInfo:userId refresh:YES];
+        self.memberList = @[userId];
     }
     
     self.tableView = [[UITableView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height) style:UITableViewStylePlain];
@@ -99,7 +107,7 @@
                 [ws.memberCollectionView reloadData];
             }
         }];
-        [[WFCUConfigManager globalManager].appServiceProvider getGroupAnnouncement:self.groupInfo.target success:^(WFCUGroupAnnouncement *announcement) {
+        [[WFCUConfigManager globalManager].appServiceProvider getGroupAnnouncement:self.conversation.target success:^(WFCUGroupAnnouncement *announcement) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 ws.groupAnnouncement = announcement;
                 [ws.tableView reloadData];
@@ -107,9 +115,7 @@
         } error:^(int error_code) {
             
         }];
-    }
-    
-    if(self.conversation.type == Channel_Type) {
+    } else if(self.conversation.type == Channel_Type) {
         CGFloat portraitWidth = 80;
         CGFloat top = 40;
         CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
@@ -186,6 +192,9 @@
             }
         } else if(self.conversation.type == Channel_Type) {
             self.memberCollectionCount = 1;
+        } else if(self.conversation.type == SecretChat_Type) {
+            self.memberCollectionCount = 0;
+            self.extraBtnNumber = 0;
         }
         
         self.memberCollectionView = [[UICollectionView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, [self.memberCollectionViewLayout getHeigthOfItemCount:self.memberCollectionCount]) collectionViewLayout:self.memberCollectionViewLayout];
@@ -269,25 +278,28 @@
     }];
     return isManager;
 }
-
+- (void)onDestroySecretChat:(id)sender {
+    __weak typeof(self) ws = self;
+    [[WFCCIMService sharedWFCIMService] destroySecretChat:self.conversation.target success:^{
+        [ws.navigationController popToRootViewControllerAnimated:YES];
+    } error:^(int error_code) {
+        [ws.navigationController popToRootViewControllerAnimated:YES];
+    }];
+}
 - (void)onDeleteAndQuit:(id)sender {
     if(self.conversation.type == Group_Type) {
         if ([self isGroupOwner]) {
             __weak typeof(self) ws = self;
             [[WFCCIMService sharedWFCIMService] removeConversation:self.conversation clearMessage:YES];
             [[WFCCIMService sharedWFCIMService] dismissGroup:self.conversation.target notifyLines:@[@(0)] notifyContent:nil success:^{
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [ws.navigationController popToRootViewControllerAnimated:YES];
-                });
+                [ws.navigationController popToRootViewControllerAnimated:YES];
             } error:^(int error_code) {
                 
             }];
         } else {
             __weak typeof(self) ws = self;
             [[WFCCIMService sharedWFCIMService] quitGroup:self.conversation.target notifyLines:@[@(0)] notifyContent:nil success:^{
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [ws.navigationController popToRootViewControllerAnimated:YES];
-                });
+                [ws.navigationController popToRootViewControllerAnimated:YES];
             } error:^(int error_code) {
                 
             }];
@@ -361,13 +373,66 @@
     
     //把action添加到actionSheet里
     [actionSheet addAction:actionLocalDelete];
-    [actionSheet addAction:actionRemoteDelete];
+    if(self.conversation.type != SecretChat_Type) {
+        [actionSheet addAction:actionRemoteDelete];
+    }
     [actionSheet addAction:actionCancel];
     
     //相当于之前的[actionSheet show];
     dispatch_async(dispatch_get_main_queue(), ^{
         [self presentViewController:actionSheet animated:YES completion:nil];
     });
+}
+
+- (void)setBurnTime:(int)ms {
+    [[WFCCIMService sharedWFCIMService] setSecretChat:self.conversation.target burnTime:ms];
+    [self.tableView reloadData];
+}
+
+- (void)onBurnTimeAction {
+    __weak typeof(self)weakSelf = self;
+
+    UIAlertController *actionSheet = [UIAlertController alertControllerWithTitle:@"设置销毁时间" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+
+    UIAlertAction *actionCancel = [UIAlertAction actionWithTitle:WFCString(@"Cancel") style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+
+    }];
+    UIAlertAction *actionNoBurn = [UIAlertAction actionWithTitle:@"不销毁" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [weakSelf setBurnTime:0];
+    }];
+    
+    UIAlertAction *action3s = [UIAlertAction actionWithTitle:@"3秒钟" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [weakSelf setBurnTime:3000];
+    }];
+    
+    UIAlertAction *action10s = [UIAlertAction actionWithTitle:@"10秒钟" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [weakSelf setBurnTime:10000];
+    }];
+    
+    UIAlertAction *action30s = [UIAlertAction actionWithTitle:@"30秒钟" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [weakSelf setBurnTime:30000];
+    }];
+    
+    UIAlertAction *action60s = [UIAlertAction actionWithTitle:@"1分钟" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [weakSelf setBurnTime:60000];
+    }];
+    
+    UIAlertAction *action600s = [UIAlertAction actionWithTitle:@"10分钟" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [weakSelf setBurnTime:600000];
+    }];
+    
+
+    //把action添加到actionSheet里
+    [actionSheet addAction:actionNoBurn];
+    [actionSheet addAction:action3s];
+    [actionSheet addAction:action10s];
+    [actionSheet addAction:action30s];
+    [actionSheet addAction:action60s];
+    [actionSheet addAction:action600s];
+    [actionSheet addAction:actionCancel];
+    
+    //相当于之前的[actionSheet show];
+    [self presentViewController:actionSheet animated:YES completion:nil];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -382,6 +447,10 @@
     } else if(self.conversation.type == Channel_Type) {
         self.channelInfo = [[WFCCIMService sharedWFCIMService] getChannelInfo:self.conversation.target refresh:NO];
         self.memberList = @[self.conversation.target];
+    } else if(self.conversation.type == SecretChat_Type) {
+        NSString *userId = [[WFCCIMService sharedWFCIMService] getSecretChatInfo:self.conversation.target].userId;
+        self.userInfo = [[WFCCIMService sharedWFCIMService] getUserInfo:userId refresh:NO];
+        self.memberList = @[userId];
     }
     [self setupMemberCollectionView];
     
@@ -436,10 +505,26 @@
     return NO;
 }
 
+- (BOOL)isGroupRemarkCell:(NSIndexPath *)indexPath {
+    if(self.conversation.type == Group_Type && indexPath.section == 0) {
+        if ([self isGroupManager] && self.groupInfo.type == GroupType_Restricted) {
+            if (indexPath.row == 4) {
+                return YES;
+            }
+        } else {
+            if (indexPath.row == 3) {
+                return YES;
+            }
+        }
+    }
+    return NO;
+}
+
 
 - (BOOL)isSearchMessageCell:(NSIndexPath *)indexPath {
   if((self.conversation.type == Group_Type && indexPath.section == 1 && indexPath.row == 0)
      ||(self.conversation.type == Single_Type && indexPath.section == 0 && indexPath.row == 0)
+     ||(self.conversation.type == SecretChat_Type && indexPath.section == 0 && indexPath.row == 0)
      ||(self.conversation.type == Channel_Type && indexPath.section == 0 && indexPath.row == 0)) {
     return YES;
   }
@@ -449,6 +534,7 @@
 - (BOOL)isMessageSilentCell:(NSIndexPath *)indexPath {
   if((self.conversation.type == Group_Type && indexPath.section == 2 && indexPath.row == 0)
      ||(self.conversation.type == Single_Type && indexPath.section == 1 && indexPath.row == 0)
+     ||(self.conversation.type == SecretChat_Type && indexPath.section == 1 && indexPath.row == 0)
      ||(self.conversation.type == Channel_Type && indexPath.section == 1 && indexPath.row == 0)) {
     return YES;
   }
@@ -458,6 +544,7 @@
 - (BOOL)isSetTopCell:(NSIndexPath *)indexPath {
   if((self.conversation.type == Group_Type && indexPath.section == 2 && indexPath.row == 1)
      ||(self.conversation.type == Single_Type && indexPath.section == 1 && indexPath.row == 1)
+     ||(self.conversation.type == SecretChat_Type && indexPath.section == 1 && indexPath.row == 1)
      ||(self.conversation.type == Channel_Type && indexPath.section == 1 && indexPath.row == 1)) {
     return YES;
   }
@@ -488,6 +575,7 @@
 - (BOOL)isClearMessageCell:(NSIndexPath *)indexPath {
   if((self.conversation.type == Group_Type && indexPath.section == 4 && indexPath.row == 0)
      || (self.conversation.type == Single_Type && indexPath.section == 2 && indexPath.row == 0)
+     || (self.conversation.type == SecretChat_Type && indexPath.section == 3 && indexPath.row == 0)
      || (self.conversation.type == Channel_Type && indexPath.section == 2 && indexPath.row == 0)) {
     return YES;
   }
@@ -511,6 +599,22 @@
     return NO;
 }
 
+- (BOOL)isDestroySecretChatCell:(NSIndexPath *)indexPath {
+    if (self.conversation.type == SecretChat_Type && indexPath.section == 3 && indexPath.row == 1) {
+        return YES;
+    }
+    
+    return NO;
+}
+
+- (BOOL)isBurnTimeCell:(NSIndexPath *)indexPath {
+    if (self.conversation.type == SecretChat_Type && indexPath.section == 2 && indexPath.row == 0) {
+        return YES;
+    }
+    
+    return NO;
+}
+
 - (BOOL)isUnsubscribeChannel:(NSIndexPath *)indexPath {
     if (self.conversation.type == Channel_Type && indexPath.section == 3 && indexPath.row == 0) {
         return YES;
@@ -522,9 +626,9 @@
     if (self.conversation.type == Group_Type) {
         if (section == 0) {
             if ([self isGroupManager] && self.groupInfo.type == GroupType_Restricted) {
-                return 4; //群名称，群二维码，群管理，群公告
+                return 5; //群名称，群二维码，群管理，群公告，群备注
             } else {
-                return 3; //群名称，群二维码，群公告
+                return 4; //群名称，群二维码，群公告，群备注
             }
             
         } else if(section == 1) {
@@ -559,6 +663,16 @@
             return 1; //清空聊天记录
         } else if(section == 3) {
             return 1; //取消订阅/销毁订阅
+        }
+    } else if(self.conversation.type == SecretChat_Type) {
+        if(section == 0) {
+            return 1; //查找聊天内容
+        } else if(section == 1) {
+            return 2; //消息免打扰，置顶聊天
+        } else if(section == 2) {
+            return 1; //清空聊天记录，删除密聊
+        } else if(section == 3) {
+            return 2; //清空聊天记录，删除密聊
         }
     }
     
@@ -621,29 +735,37 @@
 }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath  {
   if ([self isGroupNameCell:indexPath]) {
-    return [self cellOfTable:tableView WithTitle:WFCString(@"GroupName") withDetailTitle:self.groupInfo.name withDisclosureIndicator:YES withSwitch:NO withSwitchType:SwitchType_Conversation_None];
-//  } else if ([self isGroupPortraitCell:indexPath]) {
-//    UITableViewCell *cell = [self cellOfTable:tableView WithTitle:WFCString(@"ChangePortrait") withDetailTitle:nil withDisclosureIndicator:NO withSwitch:NO withSwitchType:SwitchType_Conversation_None];
-//    UIImageView *portraitView = [[UIImageView alloc] initWithFrame:CGRectMake(self.view.frame.size.width - 56, 8, 40, 40)];
-//    [portraitView sd_setImageWithURL:[NSURL URLWithString:[self.groupInfo.portrait stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]] placeholderImage:[UIImage imageNamed:@"group_default_portrait"]];
-//    cell.accessoryView = portraitView;
-//    return cell;
+      return [self cellOfTable:tableView WithTitle:WFCString(@"GroupName") withDetailTitle:self.groupInfo.name withDisclosureIndicator:YES withSwitch:NO withSwitchType:SwitchType_Conversation_None];
   } else if([self isGroupQrCodeCell:indexPath]) {
-    UITableViewCell *cell = [self cellOfTable:tableView WithTitle:WFCString(@"GroupQRCode") withDetailTitle:nil withDisclosureIndicator:YES withSwitch:NO withSwitchType:SwitchType_Conversation_None];
-      
-      CGFloat width = [UIScreen mainScreen].bounds.size.width;
-      UIImage *qrcode = [UIImage imageNamed:@"qrcode"];
-      UIImageView *qrview = [[UIImageView alloc] initWithFrame:CGRectMake(width - 60, (50 - 22) / 2.0, 22, 22)];
-      qrview.image = qrcode;
-      [cell addSubview:qrview];
+      UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"QrCell"];
+      if (cell == nil) {
+          cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"QrCell"];
+      } else {
+          cell.textLabel.font = [UIFont pingFangSCWithWeight:FontWeightStyleRegular size:16];
+          cell.textLabel.text = WFCString(@"GroupQRCode");
+          cell.detailTextLabel.text = nil;
+          cell.detailTextLabel.font = [UIFont pingFangSCWithWeight:FontWeightStyleRegular size:15];
+          cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+          cell.accessoryView = nil;
+          cell.selectionStyle = UITableViewCellSelectionStyleNone;
+          cell.separatorInset = UIEdgeInsetsMake(0, 0, 0, 0 );
+          
+          
+          
+          CGFloat width = [UIScreen mainScreen].bounds.size.width;
+          UIImage *qrcode = [UIImage imageNamed:@"qrcode"];
+          UIImageView *qrview = [[UIImageView alloc] initWithFrame:CGRectMake(width - 60, (50 - 22) / 2.0, 22, 22)];
+          qrview.image = qrcode;
+          [cell addSubview:qrview];
+      }
       
       return cell;
   } else if ([self isGroupManageCell:indexPath]) {
-    return [self cellOfTable:tableView WithTitle:WFCString(@"GroupManage") withDetailTitle:nil withDisclosureIndicator:YES withSwitch:NO withSwitchType:SwitchType_Conversation_None];
+      return [self cellOfTable:tableView WithTitle:WFCString(@"GroupManage") withDetailTitle:nil withDisclosureIndicator:YES withSwitch:NO withSwitchType:SwitchType_Conversation_None];
+  } else if ([self isGroupRemarkCell:indexPath]) {
+      return [self cellOfTable:tableView WithTitle:WFCString(@"GroupRemark") withDetailTitle:self.groupInfo.remark withDisclosureIndicator:YES withSwitch:NO withSwitchType:SwitchType_Conversation_None];
   } else if([self isGroupAnnouncementCell:indexPath]) {
-//    return [self cellOfTable:tableView WithTitle:@"群公告" withDetailTitle:nil withDisclosureIndicator:YES withSwitch:NO withSwitchType:SwitchType_Conversation_None];
-      
-      UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"announcementCell"];
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"announcementCell"];
         if (cell == nil) {
             cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"announcementCell"];
         }
@@ -749,6 +871,32 @@
       return cell;
   } else if([self isFilesCell:indexPath]) {
       return [self cellOfTable:tableView WithTitle:WFCString(@"ConvFiles") withDetailTitle:nil withDisclosureIndicator:YES withSwitch:NO withSwitchType:SwitchType_Conversation_None];
+  } else if([self isDestroySecretChatCell:indexPath]) {
+      UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"destroySecretChatCell"];
+      if (cell == nil) {
+          cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"destroySecretChatCell"];
+          for (UIView *subView in cell.subviews) {
+              [subView removeFromSuperview];
+          }
+          UIButton *btn = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, 50)];
+          [btn setTitle:@"销毁私密聊天" forState:UIControlStateNormal];
+          btn.titleLabel.font = [UIFont pingFangSCWithWeight:FontWeightStyleRegular size:16];
+          [btn setTitleColor:[UIColor colorWithHexString:@"0xf95569"] forState:UIControlStateNormal];
+          [btn addTarget:self action:@selector(onDestroySecretChat:) forControlEvents:UIControlEventTouchUpInside];
+          if (@available(iOS 14, *)) {
+              [cell.contentView addSubview:btn];
+          } else {
+              [cell addSubview:btn];
+          }
+      }
+      return cell;
+  } else if([self isBurnTimeCell:indexPath]) {
+      NSString *subTitle = @"关闭";
+      WFCCSecretChatInfo *info = [[WFCCIMService sharedWFCIMService] getSecretChatInfo:self.conversation.target];
+      if(info.burnTime) {
+          subTitle = [NSString stringWithFormat:@"%d秒", info.burnTime/1000];
+      }
+      return [self cellOfTable:tableView WithTitle:@"设置密聊焚毁时间" withDetailTitle:subTitle withDisclosureIndicator:NO withSwitch:NO withSwitchType:SwitchType_Conversation_None];
   }
     return nil;
 }
@@ -761,6 +909,8 @@
     } else if(self.conversation.type == Group_Type) {
         return 5;
     } else if(self.conversation.type == Channel_Type) {
+        return 4;
+    } else if (self.conversation.type == SecretChat_Type) {
         return 4;
     }
     return 0;
@@ -848,6 +998,24 @@
       WFCUFilesViewController *vc = [[WFCUFilesViewController alloc] init];
       vc.conversation = self.conversation;
       [self.navigationController pushViewController:vc animated:YES];
+  } else if([self isBurnTimeCell:indexPath]) {
+      [self onBurnTimeAction];
+  } else if([self isGroupRemarkCell:indexPath]) {
+      WFCUGeneralModifyViewController *gmvc = [[WFCUGeneralModifyViewController alloc] init];
+      gmvc.defaultValue = self.groupInfo.remark;
+      gmvc.titleText = WFCString(@"ModifyGroupRemark");
+      gmvc.canEmpty = YES;
+      gmvc.tryModify = ^(NSString *newValue, void (^result)(BOOL success)) {
+          [[WFCCIMService sharedWFCIMService] setGroup:self.conversation.target remark:newValue success:^{
+              result(YES);
+              weakSelf.groupInfo = [[WFCCIMService sharedWFCIMService] getGroupInfo:weakSelf.conversation.target refresh:NO];
+              [weakSelf.tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
+          } error:^(int error_code) {
+              result(NO);
+          }];
+      };
+      UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:gmvc];
+      [self.navigationController presentViewController:nav animated:YES completion:nil];
   }
 }
 

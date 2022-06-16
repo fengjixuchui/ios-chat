@@ -39,6 +39,10 @@ NSString *kFriendRequestUpdated = @"kFriendRequestUpdated";
 NSString *kSettingUpdated = @"kSettingUpdated";
 NSString *kChannelInfoUpdated = @"kChannelInfoUpdated";
 NSString *kUserOnlineStateUpdated = @"kUserOnlineStateUpdated";
+NSString *kSecretChatStateUpdated = @"kSecretChatStateUpdated";
+NSString *kSecretMessageStartBurning = @"kSecretMessageStartBurning";
+NSString *kSecretMessageBurned = @"kSecretMessageBurned";
+
 
 @protocol RefreshGroupInfoDelegate <NSObject>
 - (void)onGroupInfoUpdated:(NSArray<WFCCGroupInfo *> *)updatedGroupInfo;
@@ -57,7 +61,7 @@ NSString *kUserOnlineStateUpdated = @"kUserOnlineStateUpdated";
 @end
 
 @protocol RefreshFriendListDelegate <NSObject>
-- (void)onFriendListUpdated;
+- (void)onFriendListUpdated:(NSArray<NSString *> *)friendIds;
 @end
 
 @protocol RefreshFriendRequestDelegate <NSObject>
@@ -68,7 +72,14 @@ NSString *kUserOnlineStateUpdated = @"kUserOnlineStateUpdated";
 - (void)onSettingUpdated;
 @end
 
+@protocol SecretChatStateDelegate <NSObject>
+- (void)onSecretChatStateChanged:(NSString *)targetId newState:(WFCCSecretChatState)state;
+@end
 
+@protocol SecretMessageBurnStateDelegate <NSObject>
+- (void)onSecretMessageStartBurning:(NSString *)targetId playedMessageId:(long)messageId;
+- (void)onSecretMessageBurned:(NSArray<NSNumber *> *)messageIds;
+@end
 
 class CSCB : public mars::stn::ConnectionStatusCallback {
 public:
@@ -431,7 +442,11 @@ public:
     GFLCB(id<RefreshFriendListDelegate> delegate) : m_delegate(delegate) {}
     void onSuccess(const std::list<std::string> &friendIdList) {
         if(m_delegate) {
-            [m_delegate onFriendListUpdated];
+            NSMutableArray *arr = [[NSMutableArray alloc] init];
+            for (std::list<std::string>::const_iterator it = friendIdList.begin(); it != friendIdList.end(); ++it) {
+                [arr addObject:[NSString stringWithUTF8String:it->c_str()]];
+            }
+            [m_delegate onFriendListUpdated:arr];
         }
     }
     void onFalure(int errorCode) {
@@ -473,9 +488,33 @@ public:
   id<RefreshSettingDelegate> m_delegate;
 };
 
+class SCSCB : public mars::stn::SecretChatStateCallback {
+public:
+    SCSCB(id<SecretChatStateDelegate> delegate) : m_delegate(delegate) {}
+    void onStateChanged(const std::string &targetId, int state) {
+        [m_delegate onSecretChatStateChanged:[NSString stringWithUTF8String:targetId.c_str()] newState:(WFCCSecretChatState)state];
+    }
+    id<SecretChatStateDelegate> m_delegate;
+};
+
+class SMBSCB : public mars::stn::SecretMessageBurnStateCallback {
+public:
+    SMBSCB(id<SecretMessageBurnStateDelegate> delegate) : m_delegate(delegate) {}
+    void onSecretMessageStartBurning(const std::string &targetId, long playedMessageId) {
+        [m_delegate onSecretMessageStartBurning:[NSString stringWithUTF8String:targetId.c_str()] playedMessageId:playedMessageId];
+    }
+    void onSecretMessageBurned(const std::list<long> &messageIds) {
+        NSMutableArray *arr = [[NSMutableArray alloc] init];
+        for (std::list<long>::const_iterator it = messageIds.begin(); it != messageIds.end(); ++it) {
+            [arr addObject:@(*it)];
+        }
+        [m_delegate onSecretMessageBurned:arr];
+    }
+    id<SecretMessageBurnStateDelegate> m_delegate;
+};
 
 
-@interface WFCCNetworkService () <ConnectionStatusDelegate, ReceiveMessageDelegate, RefreshUserInfoDelegate, RefreshGroupInfoDelegate, WFCCNetworkStatusDelegate, RefreshFriendListDelegate, RefreshFriendRequestDelegate, RefreshSettingDelegate, RefreshChannelInfoDelegate, RefreshGroupMemberDelegate, ConferenceEventDelegate, ConnectToServerDelegate, TrafficDataDelegate, OnlineEventDelegate>
+@interface WFCCNetworkService () <ConnectionStatusDelegate, ReceiveMessageDelegate, RefreshUserInfoDelegate, RefreshGroupInfoDelegate, WFCCNetworkStatusDelegate, RefreshFriendListDelegate, RefreshFriendRequestDelegate, RefreshSettingDelegate, RefreshChannelInfoDelegate, RefreshGroupMemberDelegate, ConferenceEventDelegate, ConnectToServerDelegate, TrafficDataDelegate, OnlineEventDelegate, SecretChatStateDelegate, SecretMessageBurnStateDelegate>
 @property(nonatomic, assign)ConnectionStatus currentConnectionStatus;
 @property (nonatomic, strong)NSString *userId;
 @property (nonatomic, strong)NSString *passwd;
@@ -586,16 +625,8 @@ static WFCCNetworkService * sharedSingleton = nil;
 }
 
 - (void)onReceiveMessage:(NSArray<WFCCMessage *> *)messages hasMore:(BOOL)hasMore {
-    __block NSArray<WFCCMessage *> *messageList;
-    if (strcmp(dispatch_queue_get_label(DISPATCH_CURRENT_QUEUE_LABEL), dispatch_queue_get_label(dispatch_get_main_queue())) == 0) {
-        messageList = [self filterReceiveMessage:messages hasMore:hasMore];
-    } else {
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            messageList = [self filterReceiveMessage:messages hasMore:hasMore];
-        });
-    }
-    
     dispatch_async(dispatch_get_main_queue(), ^{
+        NSArray<WFCCMessage *> *messageList = [self filterReceiveMessage:messages hasMore:hasMore];
         [[NSNotificationCenter defaultCenter] postNotificationName:kReceiveMessages object:messageList];
         [self.receiveMessageDelegate onReceiveMessage:messageList hasMore:hasMore];
     });
@@ -635,6 +666,24 @@ static WFCCNetworkService * sharedSingleton = nil;
     });
 }
 
+- (void)onSecretChatStateChanged:(NSString *)targetId newState:(WFCCSecretChatState)state {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:kSecretChatStateUpdated object:targetId userInfo:@{@"state":@(state)}];
+    });
+}
+
+- (void)onSecretMessageStartBurning:(NSString *)targetId playedMessageId:(long)messageId {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:kSecretMessageStartBurning object:targetId userInfo:@{@"messageId":@(messageId)}];
+    });
+}
+
+- (void)onSecretMessageBurned:(NSArray<NSNumber *> *)messageIds {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:kSecretMessageBurned object:nil userInfo:@{@"messageIds":messageIds}];
+    });
+}
+
 - (void)addReceiveMessageFilter:(id<ReceiveMessageFilter>)filter {
     [self.messageFilterList addObject:filter];
 }
@@ -653,10 +702,10 @@ static WFCCNetworkService * sharedSingleton = nil;
         _currentConnectionStatus = currentConnectionStatus;
         
         dispatch_async(dispatch_get_main_queue(), ^{
-            [[NSNotificationCenter defaultCenter] postNotificationName:kConnectionStatusChanged object:@(_currentConnectionStatus)];
+            [[NSNotificationCenter defaultCenter] postNotificationName:kConnectionStatusChanged object:@(self.currentConnectionStatus)];
             
-            if (_connectionStatusDelegate) {
-                [_connectionStatusDelegate onConnectionStatusChanged:currentConnectionStatus];
+            if (self.connectionStatusDelegate) {
+                [self.connectionStatusDelegate onConnectionStatusChanged:currentConnectionStatus];
             }
         });
     }
@@ -730,6 +779,9 @@ static WFCCNetworkService * sharedSingleton = nil;
                                                selector:@selector(onAppTerminate)
                                                    name:UIApplicationWillTerminateNotification
                                                  object:nil];
+      [[NSNotificationCenter defaultCenter] addObserver:self
+                                               selector:@selector(userChangeClock:)
+                                                   name:UIApplicationSignificantTimeChangeNotification object:nil];
     }
     return self;
 }
@@ -864,6 +916,12 @@ static WFCCNetworkService * sharedSingleton = nil;
     mars::stn::AppWillTerminate();
 }
 
+- (void)userChangeClock:(NSNotification *)notify {
+    if(self.currentConnectionStatus == kConnectionStatusConnected) {
+        mars::baseevent::OnNetworkChange();
+    }
+}
+
 - (void)dealloc {
     
 }
@@ -883,6 +941,8 @@ static WFCCNetworkService * sharedSingleton = nil;
   mars::stn::setRefreshFriendListCallback(new GFLCB(self));
   mars::stn::setRefreshFriendRequestCallback(new GFRCB(self));
   mars::stn::setRefreshSettingCallback(new GSCB(self));
+  mars::stn::setSecretChatStateCallback(new SCSCB(self));
+  mars::stn::setSecretMessageBurnStateCallback(new SMBSCB(self));
   mars::baseevent::OnCreate();
 }
 - (BOOL)connect:(NSString *)host {
@@ -1086,6 +1146,7 @@ static WFCCNetworkService * sharedSingleton = nil;
     [[WFCCNetworkStatus sharedInstance] Stop];
     int flag = 0;
     if (clearSession) {
+        NSLog(@"本地和服务器端连接会话将被清除！！！必须再次获取token才能登陆，您确认是要清除连接会话吗？！");
         flag = 8;
     } else if(disablePush) {
         flag = 1;
@@ -1098,11 +1159,12 @@ static WFCCNetworkService * sharedSingleton = nil;
     mars::stn::Disconnect(flag);
   }
 }
-
 - (NSString *)getHost {
     return [NSString stringWithUTF8String:mars::stn::GetHost().c_str()];
 }
-
+- (int)getPort {
+    return mars::stn::GetPort();
+}
 - (NSString *)getHostEx {
     return [NSString stringWithUTF8String:mars::stn::GetHostEx().c_str()];
 }
@@ -1152,6 +1214,10 @@ static WFCCNetworkService * sharedSingleton = nil;
 
 - (void)setProxyInfo:(NSString *)host ip:(NSString *)ip port:(int)port username:(NSString *)username password:(NSString *)password {
     mars::stn::setProxyInfo(host?[host UTF8String]:"", ip?[ip UTF8String]:"", port, username?[username UTF8String]:"", password?[password UTF8String]:"");
+}
+
+- (NSString *)getProtoRevision {
+    return [NSString stringWithUTF8String:mars::stn::getProtoRevision().c_str()];
 }
 
 - (void)setVoipDeviceToken:(NSString *)token {
@@ -1205,9 +1271,9 @@ static WFCCNetworkService * sharedSingleton = nil;
   });
 }
 
-- (void)onFriendListUpdated {
+- (void)onFriendListUpdated:(NSArray<NSString *> *)friendIds {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [[NSNotificationCenter defaultCenter] postNotificationName:kFriendListUpdated object:nil];
+        [[NSNotificationCenter defaultCenter] postNotificationName:kFriendListUpdated object:friendIds];
     });
 }
 

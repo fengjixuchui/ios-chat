@@ -30,8 +30,6 @@
 }
 
 - (void)setModel:(WFCUMessageModel *)model {
-    [super setModel:model];
-    
     WFCCStickerMessageContent *stickerMsg = (WFCCStickerMessageContent *)model.message.content;
     __weak typeof(self) weakSelf = self;
     if (!stickerMsg.localPath.length || ![WFCUUtilities isFileExist:stickerMsg.localPath]) {
@@ -44,16 +42,26 @@
         } error:^(long long messageUid, int error_code) {
             if (messageUid == weakSelf.model.message.messageUid) {
                 weakSelf.model.mediaDownloading = NO;
+                [weakSelf setModel:weakSelf.model];
             }
         }];
         if (downloading) {
             model.mediaDownloading = YES;
         }
+    } else {
+        model.mediaDownloading = NO;
     }
+    [super setModel:model];
     
     self.thumbnailView.frame = self.bubbleView.bounds;
     if (stickerMsg.localPath.length && [WFCUUtilities isFileExist:stickerMsg.localPath]) {
-        [self.thumbnailView sd_setImageWithURL:[NSURL fileURLWithPath:stickerMsg.localPath]];
+        if(model.message.conversation.type == SecretChat_Type && model.message.direction == MessageDirection_Receive) {
+            NSData *data = [NSData dataWithContentsOfFile:stickerMsg.localPath];
+            data = [[WFCCIMService sharedWFCIMService] decodeSecretChat:model.message.conversation.target mediaData:data];
+            self.thumbnailView.image = [UIImage imageWithData:data];
+        } else {
+            [self.thumbnailView sd_setImageWithURL:[NSURL fileURLWithPath:stickerMsg.localPath]];
+        }
     } else {
         self.thumbnailView.image = nil;
     }

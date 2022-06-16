@@ -155,6 +155,7 @@ namespace mars{
             int type;
             int memberCount;
             std::string extra;
+            std::string remark;
             int64_t updateDt;
             int mute;
             int joinType;
@@ -473,6 +474,9 @@ namespace mars{
             kUserSettingVoipSilent = 21,
             kUserSettingPttReserved = 22,
             kUserSettingCustomState = 23,
+            kUserSettingDisableSecretChat = 24,
+            kUserSettingPttSilent = 25,
+            kUserSettingGroupRemark = 26,
 
             kUserSettingCustomBegin = 1000
         };
@@ -623,11 +627,51 @@ namespace mars{
 #endif //WFCHAT_PROTO_SERIALIZABLE
     };
     
+    class TSecretChatInfo : public TSerializable {
+    public:
+        TSecretChatInfo() : state(0), burnTime(0), createTime(0) {}
+        virtual ~TSecretChatInfo() {}
+        std::string targetId;
+        std::string userId;
+        int state;
+        int burnTime;
+        int64_t createTime;
+#if WFCHAT_PROTO_SERIALIZABLE
+        virtual void Serialize(void *writer) const;
+        virtual void Unserialize(const Value& value);
+#endif //WFCHAT_PROTO_SERIALIZABLE
+    };
+    
+    class TBurnMessageInfo : public TSerializable {
+    public:
+        TBurnMessageInfo() : messageId(0), messageUid(0), direction(0), burnTime(0), isMedia(0), messageDt(0) {}
+        virtual ~TBurnMessageInfo() {}
+        long messageId;
+        int64_t messageUid;
+        std::string targetId;
+        int direction;
+        int burnTime;
+        int isMedia;
+        int64_t messageDt;
+#if WFCHAT_PROTO_SERIALIZABLE
+        virtual void Serialize(void *writer) const;
+        virtual void Unserialize(const Value& value);
+#endif //WFCHAT_PROTO_SERIALIZABLE
+    };
+    
+
         class GeneralStringCallback {
         public:
             virtual void onSuccess(const std::string &key) = 0;
             virtual void onFalure(int errorCode) = 0;
             virtual ~GeneralStringCallback() {}
+        };
+    
+        class GeneralStringListCallback {
+        public:
+            virtual void onSuccess(const std::list<std::string> &stringList) = 0;
+            virtual void onFalure(int errorCode) = 0;
+            virtual ~GeneralStringListCallback() {}
         };
 
         class UploadMediaCallback {
@@ -804,7 +848,25 @@ namespace mars{
         virtual ~WatchOnlineStateCallback() {}
     };
     
+    class CreateSecretChatCallback {
+    public:
+        virtual void onSuccess(const std::string &targetId, int line) = 0;
+        virtual void onFalure(int errorCode) = 0;
+        virtual ~CreateSecretChatCallback() {}
+    };
     
+    class SecretChatStateCallback {
+    public:
+        virtual void onStateChanged(const std::string &targetId, int state) = 0;
+        virtual ~SecretChatStateCallback() {}
+    };
+    
+    class SecretMessageBurnStateCallback {
+    public:
+        virtual void onSecretMessageStartBurning(const std::string &targetId, long playedMsgId) = 0;
+        virtual void onSecretMessageBurned(const std::list<long> &messageIds) = 0;
+        virtual ~SecretMessageBurnStateCallback() {}
+    };
     
         enum ConnectionStatus {
             kConnectionStatusKickedOff = -7,
@@ -855,9 +917,12 @@ namespace mars{
             virtual void onOnlineEvent(const std::list<mars::stn::TUserOnlineState> &events) = 0;
         };
 
+        extern std::string getCurrentUserId();
+
         extern void useEncryptSM4();
         extern bool setAuthInfo(const std::string &userId, const std::string &token);
         extern void setLiteMode(bool liteMode);
+        extern void setLowBPSMode(bool lowBPSMode);
         extern void Disconnect(uint8_t flag);
         extern bool Connect(const std::string& host);
         extern void setBackupAddressStrategy(int strategy);
@@ -879,6 +944,8 @@ namespace mars{
         extern void setRefreshFriendListCallback(GetMyFriendsCallback *callback);
         extern void setRefreshFriendRequestCallback(GetFriendRequestCallback *callback);
         extern void setRefreshSettingCallback(GetSettingCallback *callback);
+        extern void setSecretChatStateCallback(SecretChatStateCallback *callback);
+        extern void setSecretMessageBurnStateCallback(SecretMessageBurnStateCallback *callback);
         extern ConnectionStatus getConnectionStatus();
 
         extern int64_t getServerDeltaTime();
@@ -887,7 +954,8 @@ namespace mars{
         extern long sendMessage(TMessage &tmsg, SendMsgCallback *callback, int expireDuration);
 
         extern bool sendMessageEx(long messageId, SendMsgCallback *callback, int expireDuration);
-
+    
+        extern bool cancelSendingMessage(long messageId);
 
         extern void recallMessage(long long messageUid, GeneralOperationCallback *callback);
         extern void deleteRemoteMessage(long long messageUid, GeneralOperationCallback *callback);
@@ -902,11 +970,11 @@ namespace mars{
     
         extern void clearRemoteConversationMessages(int conversationType, const std::string &target, int line, GeneralOperationCallback *callback);
 
-        extern void loadConversationFileRecords(const TConversation &conv, const std::string &fromUser, long long beforeUid, int count, LoadFileRecordCallback *callback);
-        extern void loadMyFileRecords(long long beforeUid, int count, LoadFileRecordCallback *callback);
+        extern void loadConversationFileRecords(const TConversation &conv, const std::string &fromUser, long long beforeUid, int order, int count, LoadFileRecordCallback *callback);
+        extern void loadMyFileRecords(long long beforeUid, int order, int count, LoadFileRecordCallback *callback);
         extern void deleteFileRecords(long long messageUid, GeneralOperationCallback *callback);
-        extern void searchConversationFileRecords(const std::string &keyword, const TConversation &conv, const std::string &fromUser, long long beforeUid, int count, LoadFileRecordCallback *callback);
-        extern void searchMyFileRecords(const std::string &keyword, long long beforeUid, int count, LoadFileRecordCallback *callback);
+        extern void searchConversationFileRecords(const std::string &keyword, const TConversation &conv, const std::string &fromUser, long long beforeUid, int order, int count, LoadFileRecordCallback *callback);
+        extern void searchMyFileRecords(const std::string &keyword, long long beforeUid, int order, int count, LoadFileRecordCallback *callback);
     
         extern int uploadGeneralMedia(const std::string &fileName, const std::string &mediaData, int mediaType, UpdateMediaCallback *callback);
 
@@ -984,6 +1052,8 @@ namespace mars{
 
         extern void syncConversationReadDt(int conversatinType, const std::string &target, int ine, int64_t readedDt, const std::list<std::string> &senders = std::list<std::string>(), long syncId = -1);
 
+        extern void setGroupRemark(const std::string &groupId, const std::string &remark, GeneralOperationCallback *callback);
+        extern std::string getGroupRemark(const std::string &groupId);
 
         extern void createChannel(const std::string &channelId, const std::string &channelName, const std::string &channelPortrait, int status, const std::string &desc, const std::string &extra, const std::string &secret, const std::string &cb, CreateChannelCallback *callback);
 
@@ -997,10 +1067,19 @@ namespace mars{
         extern void searchChannel(const std::string &keyword, bool puzzy, SearchChannelCallback *callback);
 
         extern void listenChannel(const std::string &channelId, bool listen, GeneralOperationCallback *callback);
-
+    
+        extern void getListenedChannels(GeneralStringListCallback *callback);
+    
+        extern void createSecretChat(const std::string &userId, CreateSecretChatCallback *callback);
+        extern void destroySecretChat(const std::string &targetId, GeneralOperationCallback *callback);
+        extern std::string decodeSecretChatMediaData(const std::string &targetId, const unsigned char *indata, int insize);
+        extern std::string encodeSecretChatMediaData(const std::string &targetId, const unsigned char *indata, int insize);
+    
         extern std::string GetImageThumbPara();
 
-        extern void GetApplicationToken(const std::string &applicationId, GeneralStringCallback *callback);
+        extern void GetAuthCode(const std::string &applicationId, int type, const std::string &host, GeneralStringCallback *callback);
+    
+        extern void ApplicationConfig(const std::string &appId, int appType, int64_t timestamp, const std::string &nonceStr, const std::string &signature, GeneralOperationCallback *callback);
 
         extern void KickoffPCClient(const std::string &pcClientId, GeneralOperationCallback *callback);
 
@@ -1012,6 +1091,7 @@ namespace mars{
         extern bool HasMediaBackupUrl();
         extern bool IsGlobalDisableSyncDraft();
         extern bool IsEnableUserOnlineState();
+        extern bool IsEnableSecretChat();
     
         extern void sendConferenceRequest(int64_t sessionId, const std::string &roomId, const std::string &request, bool advance, const std::string &data, GeneralStringCallback *callback);
     
@@ -1024,6 +1104,7 @@ namespace mars{
         extern bool GetFeeds(std::string data, std::list<TMomentsFeed> &feeds, bool gzip);
         extern bool GetFeed(std::string data, TMomentsFeed &feed, bool gzip);
         extern bool GetComments(std::string data, std::list<TMomentsComment> &feeds, bool gzip);
+        extern const std::string getProtoRevision();
 		
     }
 }

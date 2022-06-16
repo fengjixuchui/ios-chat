@@ -38,6 +38,15 @@
     payload.binaryContent = [NSJSONSerialization dataWithJSONObject:dataDict
                                                             options:kNilOptions
                                                               error:nil];
+    
+    NSDictionary *pd;
+    if(self.targetIds.count) {
+        pd = @{@"callId":self.callId, @"audioOnly":@(self.audioOnly), @"participants":self.targetIds};
+    } else {
+        pd = @{@"callId":self.callId, @"audioOnly":@(self.audioOnly)};
+    }
+    
+    payload.pushData = [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:pd options:kNilOptions error:nil] encoding:NSUTF8StringEncoding];
     return payload;
 }
 
@@ -56,9 +65,11 @@
         self.targetIds = dictionary[@"ts"];
         self.pin = dictionary[@"p"];
         if (self.targetIds.count == 0) {
-            NSString *target = dictionary[@"t"];
             NSMutableArray *arr = [[NSMutableArray alloc] init];
-            [arr addObject:target];
+            NSString *target = dictionary[@"t"];
+            if(target) {
+                [arr addObject:target];
+            }
             self.targetIds = arr;
         }
     }

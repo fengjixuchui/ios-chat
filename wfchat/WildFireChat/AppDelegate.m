@@ -38,6 +38,12 @@
 #import <PttClient/WFPttClient.h>
 #endif
 
+#if USE_CALL_KIT
+#import "WFCCallKitManager.h"
+#endif
+
+
+
 @interface AppDelegate () <ConnectionStatusDelegate, ConnectToServerDelegate, ReceiveMessageDelegate,
 #if WFCU_SUPPORT_VOIP
     WFAVEngineDelegate,
@@ -49,10 +55,17 @@
 >
 @property(nonatomic, strong) AVAudioPlayer *audioPlayer;
 @property(nonatomic, strong) UILocalNotification *localCallNotification;
+#if USE_CALL_KIT
+@property(nonatomic, strong) WFCCallKitManager *callKitManager;
+#endif
 @end
 
 @implementation AppDelegate
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+#if !USE_CALL_KIT
+    [WFAVEngineKit notRegisterVoipPushService];
+#endif
+    
     [WFCCNetworkService startLog];
 //    [[WFCCNetworkService sharedInstance] useSM4];
     [WFCCNetworkService sharedInstance].connectionStatusDelegate = self;
@@ -69,8 +82,9 @@
     //[[WFCCIMService sharedWFCIMService] setDefaultSilentWhenPcOnline:NO];
 
 #if WFCU_SUPPORT_VOIP
-    //设置不注册voip推送服务，需要在sharedEngineKit方法之前调用
-//    [WFAVEngineKit notRegisterVoipPushService];
+    //多人音视频通话时，是否在会话中现在正在通话让其他人主动加入。
+    //[WFCUConfigManager globalManager].enableMultiCallAutoJoin = YES;
+    
     //音视频高级版不需要stun/turn服务，请注释掉下面这行。单人版和多人版需要turn服务，请自己部署然后修改配置文件。
     [[WFAVEngineKit sharedEngineKit] addIceServer:ICE_ADDRESS userName:ICE_USERNAME password:ICE_PASSWORD];
     
@@ -89,7 +103,6 @@
     
     [WFCUConfigManager globalManager].appServiceProvider = [AppService sharedAppService];
     [WFCUConfigManager globalManager].fileTransferId = FILE_TRANSFER_ID;
-    
 #ifdef WFC_PTT
     //初始化对讲SDK
     [WFPttClient sharedClient].delegate = self;
@@ -145,6 +158,10 @@
         UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:loginVC];
         self.window.rootViewController = nav;
     }
+    
+#if USE_CALL_KIT
+    self.callKitManager = [[WFCCallKitManager alloc] init];
+#endif
     
     return YES;
 }
@@ -246,7 +263,7 @@
             if (!groupInfo) {
                 continue;
             }
-            sc.title = groupInfo.name;
+            sc.title = groupInfo.displayName;
             sc.portraitUrl = groupInfo.portrait;
             if (!groupInfo.portrait.length) {
                 [needComposedGroupIds addObject:info.conversation.target];
@@ -403,6 +420,9 @@
         } else {
             localNote.alertBody = [msg digest];
         }
+        if(msg.conversation.type == SecretChat_Type) {
+            localNote.alertBody = @"您收到了新的密聊消息";
+        }
       if (msg.conversation.type == Single_Type) {
         WFCCUserInfo *sender = [[WFCCIMService sharedWFCIMService] getUserInfo:msg.conversation.target refresh:NO];
         if (sender.displayName) {
@@ -415,9 +435,9 @@
       } else if(msg.conversation.type == Group_Type) {
           WFCCGroupInfo *group = [[WFCCIMService sharedWFCIMService] getGroupInfo:msg.conversation.target refresh:NO];
           WFCCUserInfo *sender = [[WFCCIMService sharedWFCIMService] getUserInfo:msg.fromUser refresh:NO];
-          if (sender.displayName && group.name) {
+          if (sender.displayName && group.displayName) {
               if (@available(iOS 8.2, *)) {
-                  localNote.alertTitle = [NSString stringWithFormat:@"%@@%@:", sender.displayName, group.name];
+                  localNote.alertTitle = [NSString stringWithFormat:@"%@@%@:", sender.displayName, group.displayName];
               } else {
                   // Fallback on earlier versions
               }
@@ -436,6 +456,16 @@
               }
                   
           }
+      } else if (msg.conversation.type == SecretChat_Type) {
+          NSString *userId = [[WFCCIMService sharedWFCIMService] getSecretChatInfo:msg.conversation.target].userId;
+          WFCCUserInfo *sender = [[WFCCIMService sharedWFCIMService] getUserInfo:userId refresh:NO];
+          if (sender.displayName) {
+              if (@available(iOS 8.2, *)) {
+                  localNote.alertTitle = sender.displayName;
+              } else {
+                  // Fallback on earlier versions
+              }
+          }
       }
         
       localNote.applicationIconBadgeNumber = count;
@@ -449,7 +479,7 @@
 }
 
 - (NSInteger)updateBadgeNumber {
-    WFCCUnreadCount *unreadCount = [[WFCCIMService sharedWFCIMService] getUnreadCount:@[@(Single_Type), @(Group_Type), @(Channel_Type)] lines:@[@(0)]];
+    WFCCUnreadCount *unreadCount = [[WFCCIMService sharedWFCIMService] getUnreadCount:@[@(Single_Type), @(Group_Type), @(Channel_Type), @(SecretChat_Type)] lines:@[@(0)]];
     int unreadFriendRequest = [[WFCCIMService sharedWFCIMService] getUnreadFriendRequestStatus];
     int count = unreadCount.unread + unreadFriendRequest;
     [UIApplication sharedApplication].applicationIconBadgeNumber = count;
@@ -608,9 +638,10 @@
 #pragma mark - WFAVEngineDelegate
 //voip 当可以使用pushkit时，如果有来电或者结束，会唤起应用，收到来电通知/电话结束通知，弹出通知。
 - (void)didReceiveCall:(WFAVCallSession *)session {
+#if !USE_CALL_KIT
     //收到来电通知后等待200毫秒，检查session有效后再弹出通知。原因是当当前用户不在线时如果有人来电并挂断，当前用户再连接后，会出现先弹来电界面，再消失的画面。
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if ([WFAVEngineKit sharedEngineKit].currentSession.state != kWFAVEngineStateIncomming) {
+        if ([WFAVEngineKit sharedEngineKit].currentSession.state != kWFAVEngineStateIncomming && [WFAVEngineKit sharedEngineKit].currentSession.state != kWFAVEngineStateConnected && [WFAVEngineKit sharedEngineKit].currentSession.state != kWFAVEngineStateConnecting) {
             return;
         }
         
@@ -653,10 +684,13 @@
             self.localCallNotification = nil;
         }
     });
-    
+#else
+    [self.callKitManager didReceiveCall:session];
+#endif
 }
 
 - (void)shouldStartRing:(BOOL)isIncoming {
+#if !USE_CALL_KIT
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if ([WFAVEngineKit sharedEngineKit].currentSession.state == kWFAVEngineStateIncomming || [WFAVEngineKit sharedEngineKit].currentSession.state == kWFAVEngineStateOutgoing) {
             if([UIApplication sharedApplication].applicationState == UIApplicationStateBackground) {
@@ -688,6 +722,7 @@
             }
         }
     });
+#endif
 }
 
 void systemAudioCallback (SystemSoundID soundID, void* clientData) {
@@ -709,6 +744,7 @@ void systemAudioCallback (SystemSoundID soundID, void* clientData) {
 }
 
 - (void)didCallEnded:(WFAVCallEndReason)reason duration:(int)callDuration {
+#if !USE_CALL_KIT
     //在后台时，如果电话挂断，清除掉来电通知，如果未接听超时或者未接通对方挂掉，弹出结束本地通知。
     if ([UIApplication sharedApplication].applicationState == UIApplicationStateBackground) {
         if(self.localCallNotification) {
@@ -738,8 +774,18 @@ void systemAudioCallback (SystemSoundID soundID, void* clientData) {
             [[UIApplication sharedApplication] scheduleLocalNotification:callEndNotification];
         }
     }
+#else
+    [self.callKitManager didCallEnded:reason duration:callDuration];
+#endif
 }
 
+- (void)didReceiveIncomingPushWithPayload:(PKPushPayload *)payload
+                                  forType:(NSString *)type {
+    NSLog(@"didReceiveIncomingPushWithPayload");
+#if USE_CALL_KIT
+    [self.callKitManager didReceiveIncomingPushWithPayload:payload forType:type];
+#endif
+}
 #endif
 
 //voip 当无法使用pushkit时，需要使用backgroup推送，在这里弹出来电通知和取消来电通知

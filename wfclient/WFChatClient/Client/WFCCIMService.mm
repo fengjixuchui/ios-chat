@@ -18,6 +18,8 @@
 #import "WFCCMarkUnreadMessageContent.h"
 #import "wav_amr.h"
 #import "WFCCUserOnlineState.h"
+#import "WFAFNetworking.h"
+#import "WFCCRawMessageContent.h"
 
 NSString *kSendingMessageStatusUpdated = @"kSendingMessageStatusUpdated";
 NSString *kUploadMediaMessageProgresse = @"kUploadMediaMessageProgresse";
@@ -29,13 +31,14 @@ NSString *kMessageDelivered = @"kMessageDelivered";
 NSString *kMessageReaded = @"kMessageReaded";
 NSString *kMessageUpdated = @"kMessageUpdated";
 
+
 class IMSendMessageCallback : public mars::stn::SendMsgCallback {
-private:
+public:
     void(^m_successBlock)(long long messageUid, long long timestamp);
     void(^m_errorBlock)(int error_code);
     void(^m_progressBlock)(long uploaded, long total);
     WFCCMessage *m_message;
-public:
+
     IMSendMessageCallback(WFCCMessage *message, void(^successBlock)(long long messageUid, long long timestamp), void(^progressBlock)(long uploaded, long total), void(^errorBlock)(int error_code)) : mars::stn::SendMsgCallback(), m_message(message), m_successBlock(successBlock), m_progressBlock(progressBlock), m_errorBlock(errorBlock) {};
      void onSuccess(long long messageUid, long long timestamp) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -67,9 +70,9 @@ public:
     void onPrepared(long messageId, int64_t savedTime) {
         m_message.messageId = messageId;
         m_message.serverTime = savedTime;
-        if(m_message.messageId) {
+        if(messageId) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                [[NSNotificationCenter defaultCenter] postNotificationName:kSendingMessageStatusUpdated object:@(m_message.messageId) userInfo:@{@"status":@(Message_Status_Sending), @"message":m_message}];
+                [[NSNotificationCenter defaultCenter] postNotificationName:kSendingMessageStatusUpdated object:@(messageId) userInfo:@{@"status":@(Message_Status_Sending), @"message":m_message}];
             });
         }
     }
@@ -78,9 +81,10 @@ public:
             WFCCMediaMessageContent *mediaContent = (WFCCMediaMessageContent *)m_message.content;
             mediaContent.remoteUrl = [NSString stringWithUTF8String:remoteUrl.c_str()];
         }
-        if(m_message.messageId) {
+        long messageId = m_message.messageId;
+        if(messageId) {
             dispatch_async(dispatch_get_main_queue(), ^{
-            [[NSNotificationCenter defaultCenter] postNotificationName:kUploadMediaMessageProgresse object:@(m_message.messageId) userInfo:@{@"progress":@(1), @"finish":@(YES)}];
+            [[NSNotificationCenter defaultCenter] postNotificationName:kUploadMediaMessageProgresse object:@(messageId) userInfo:@{@"progress":@(1), @"finish":@(YES)}];
             });
         }
     }
@@ -104,6 +108,45 @@ public:
         m_message = nil;
     }
 };
+
+
+@interface WFCUUploadModel : NSObject <NSURLSessionDelegate> {
+@public
+    IMSendMessageCallback *_sendCallback;
+}
+
+@property(nonatomic, strong)NSURLSessionUploadTask *uploadTask;
+@property(nonatomic, assign)int fileSize;
+@end
+
+@implementation WFCUUploadModel
+- (void)didUploaded:(NSString *)remoteUrl {
+    WFCCMediaMessageContent *mediaContent = (WFCCMediaMessageContent *)self->_sendCallback->m_message.content;
+    mediaContent.remoteUrl = remoteUrl;
+    [[WFCCIMService sharedWFCIMService] updateMessage:self->_sendCallback->m_message.messageId content:self->_sendCallback->m_message.content];
+    self->_sendCallback->onMediaUploaded([remoteUrl UTF8String]);
+    [[WFCCIMService sharedWFCIMService] sendSavedMessage:self->_sendCallback->m_message expireDuration:0 success:self->_sendCallback->m_successBlock error:self->_sendCallback->m_errorBlock];
+    delete self->_sendCallback;
+}
+
+- (void)didUploadedFailed:(int)errorCode {
+    [[WFCCIMService sharedWFCIMService] updateMessage:self->_sendCallback->m_message.messageId status:Message_Status_Send_Failure];
+    self->_sendCallback->onFalure(errorCode);
+}
+
+- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
+                                didSendBodyData:(int64_t)bytesSent
+                                 totalBytesSent:(int64_t)totalBytesSent
+                       totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        float uploadProgress = totalBytesSent * 1.f / self.fileSize;
+        NSLog(@"upload progress %f", uploadProgress);
+        self->_sendCallback->onProgress((int)totalBytesSent, self.fileSize);
+    });
+}
+
+@end
+
 extern WFCCUserInfo* convertUserInfo(const mars::stn::TUserInfo &tui);
 
 
@@ -191,6 +234,69 @@ public:
     }
 
     virtual ~IMGeneralStringCallback() {
+        m_successBlock = nil;
+        m_errorBlock = nil;
+    }
+};
+
+class IMGeneralStringListCallback : public mars::stn::GeneralStringListCallback {
+private:
+    void(^m_successBlock)(NSArray<NSString *> *stringArray);
+    void(^m_errorBlock)(int error_code);
+public:
+    IMGeneralStringListCallback(void(^successBlock)(NSArray<NSString *> *stringArray), void(^errorBlock)(int error_code)) : mars::stn::GeneralStringListCallback(), m_successBlock(successBlock), m_errorBlock(errorBlock) {};
+    void onSuccess(const std::list<std::string> &strs) {
+        NSMutableArray *arr = [[NSMutableArray alloc] init];
+        for (std::list<std::string>::const_iterator it = strs.begin(); it != strs.end(); ++it) {
+            [arr addObject:[NSString stringWithUTF8String:it->c_str()]];
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (m_successBlock) {
+                m_successBlock(arr);
+            }
+            delete this;
+        });
+    }
+    void onFalure(int errorCode) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (m_errorBlock) {
+                m_errorBlock(errorCode);
+            }
+            delete this;
+        });
+    }
+
+    virtual ~IMGeneralStringListCallback() {
+        m_successBlock = nil;
+        m_errorBlock = nil;
+    }
+};
+
+class IMCreateSecretChatCallback : public mars::stn::CreateSecretChatCallback {
+private:
+    void(^m_successBlock)(NSString *generalStr, int line);
+    void(^m_errorBlock)(int error_code);
+public:
+    IMCreateSecretChatCallback(void(^successBlock)(NSString *groupId, int line), void(^errorBlock)(int error_code)) : mars::stn::CreateSecretChatCallback(), m_successBlock(successBlock), m_errorBlock(errorBlock) {};
+    void onSuccess(const std::string &str, int line) {
+        NSString *nsstr = [NSString stringWithUTF8String:str.c_str()];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (m_successBlock) {
+                m_successBlock(nsstr, line);
+            }
+            delete this;
+        });
+    }
+    void onFalure(int errorCode) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (m_errorBlock) {
+                m_errorBlock(errorCode);
+            }
+            delete this;
+        });
+    }
+
+    virtual ~IMCreateSecretChatCallback() {
         m_successBlock = nil;
         m_errorBlock = nil;
     }
@@ -319,6 +425,7 @@ public:
 };
 
 extern NSMutableArray* convertProtoMessageList(const std::list<mars::stn::TMessage> &messageList, BOOL reverse);
+extern WFCCGroupInfo *convertProtoGroupInfo(const mars::stn::TGroupInfo &tgi);
 
 class IMLoadRemoteMessagesCallback : public mars::stn::LoadRemoteMessagesCallback {
 private:
@@ -484,24 +591,8 @@ public:
         if (m_successBlock) {
             NSMutableArray *ret = [[NSMutableArray alloc] init];
             for (std::list<const mars::stn::TGroupInfo>::const_iterator it = groupInfoList.begin(); it != groupInfoList.end(); it++) {
-                WFCCGroupInfo *gi = [[WFCCGroupInfo alloc] init];
                 const mars::stn::TGroupInfo &tgi = *it;
-                gi.target = [NSString stringWithUTF8String:tgi.target.c_str()];
-                gi.type = (WFCCGroupType)tgi.type;
-                gi.memberCount = tgi.memberCount;
-                gi.portrait = [NSString stringWithUTF8String:tgi.portrait.c_str()];
-                gi.name = [NSString stringWithUTF8String:tgi.name.c_str()];
-                gi.owner = [NSString stringWithUTF8String:tgi.owner.c_str()];
-                gi.extra = [NSString stringWithUTF8String:tgi.extra.c_str()];
-
-                gi.mute = tgi.mute;
-                gi.joinType = tgi.joinType;
-                gi.privateChat = tgi.privateChat;
-                gi.searchable = tgi.searchable;
-                gi.historyMessage = tgi.historyMessage;
-                gi.maxMemberCount = tgi.maxMemberCount;
-                gi.updateTimestamp = tgi.updateDt;
-                
+                WFCCGroupInfo *gi = convertProtoGroupInfo(tgi);
                 [ret addObject:gi];
             }
             
@@ -657,6 +748,40 @@ public:
     m_successBlock = nil;
     m_errorBlock = nil;
   }
+};
+
+class IMSetGroupRemarkCallback : public mars::stn::GeneralOperationCallback {
+private:
+    NSString *mGroupId;
+    void(^m_successBlock)();
+    void(^m_errorBlock)(int error_code);
+public:
+    IMSetGroupRemarkCallback(NSString *groupId, void(^successBlock)(), void(^errorBlock)(int error_code)) : mars::stn::GeneralOperationCallback(), mGroupId(groupId), m_successBlock(successBlock), m_errorBlock(errorBlock) {};
+    void onSuccess() {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (m_successBlock) {
+                m_successBlock();
+            }
+            WFCCGroupInfo *groupInfo = [[WFCCIMService sharedWFCIMService] getGroupInfo:mGroupId refresh:NO];
+            if(groupInfo.target.length) {
+                [[NSNotificationCenter defaultCenter] postNotificationName:kGroupInfoUpdated object:mGroupId userInfo:@{@"groupInfo":groupInfo}];
+            }
+            delete this;
+        });
+    }
+    void onFalure(int errorCode) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (m_errorBlock) {
+                m_errorBlock(errorCode);
+            }
+            delete this;
+        });
+    }
+
+    virtual ~IMSetGroupRemarkCallback() {
+        m_successBlock = nil;
+        m_errorBlock = nil;
+    }
 };
 
 static WFCCMessage *convertProtoMessage(const mars::stn::TMessage *tMessage) {
@@ -838,6 +963,11 @@ static void fillTMessage(mars::stn::TMessage &tmsg, WFCCConversation *conv, WFCC
 @property(nonatomic, assign)BOOL defaultSilentWhenPCOnline;
 
 @property(nonatomic, strong)NSMutableDictionary<NSString *, WFCCUserOnlineState*> *useOnlineCacheMap;
+
+@property(nonatomic, assign)BOOL rawMessage;
+
+//UploadModel or UploadTask
+@property(nonatomic, strong)NSMutableDictionary<NSNumber *, NSObject *> *uploadingModelMap;
 @end
 
 @implementation WFCCIMService
@@ -849,11 +979,16 @@ static void fillTMessage(mars::stn::TMessage &tmsg, WFCCConversation *conv, WFCC
                 sharedSingleton.MessageContentMaps = [[NSMutableDictionary alloc] init];
                 sharedSingleton.defaultSilentWhenPCOnline = YES;
                 sharedSingleton.useOnlineCacheMap = [[NSMutableDictionary alloc] init];
+                sharedSingleton.uploadingModelMap = [[NSMutableDictionary alloc] init];
             }
         }
     }
 
     return sharedSingleton;
+}
+
+- (void)useRawMessage {
+    self.rawMessage = YES;
 }
 
 - (WFCCMessage *)send:(WFCCConversation *)conversation
@@ -918,9 +1053,115 @@ static void fillTMessage(mars::stn::TMessage &tmsg, WFCCConversation *conv, WFCC
     fillTMessage(tmsg, conversation, content);
     message.fromUser = [WFCCNetworkService sharedInstance].userId;
     
-    mars::stn::sendMessage(tmsg, new IMSendMessageCallback(message, successBlock, progressBlock, errorBlock), expireDuration);
+    BOOL largeMedia = NO;
+    int fileSize  = 0;
+    if(tmsg.content.mediaType > 0 && tmsg.content.remoteMediaUrl.empty() && !tmsg.content.localMediaPath.empty() && [self isSupportBigFilesUpload] && conversation.type != SecretChat_Type) {
+        NSString *filePath = [NSString stringWithUTF8String:tmsg.content.localMediaPath.c_str()];
+        NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+        NSNumber *fileSizeValue = nil;
+        NSError *fileSizeError = nil;
+        [fileURL getResourceValue:&fileSizeValue
+                           forKey:NSURLFileSizeKey
+                            error:&fileSizeError];
+        if (!fileSizeError) {
+            NSLog(@"value for %@ is %@", fileURL, fileSizeValue);
+            largeMedia = [fileSizeValue integerValue] > 100000000L;
+            fileSize = (int)[fileSizeValue integerValue];
+        }
+    }
+    if(largeMedia) {
+        long msgId = mars::stn::MessageDB::Instance()->InsertMessage(tmsg);
+        message.messageId = msgId;
+        
+        IMSendMessageCallback *callback = new IMSendMessageCallback(message, successBlock, progressBlock, errorBlock);
+        callback->onPrepared(message.messageId, message.serverTime);
+        
+        __weak typeof(self)ws = self;
+        [self getUploadUrl:@"" mediaType:(WFCCMediaType)tmsg.content.mediaType contentType:nil success:^(NSString *uploadUrl, NSString *downloadUrl, NSString *backupUploadUrl, int type) {
+            if(type == 1) { //not implement qiniu yet
+                [ws uploadQiniu:uploadUrl messageId:msgId file:[NSString stringWithUTF8String:tmsg.content.localMediaPath.c_str()] remoteUrl:downloadUrl fileSize:fileSize callback:callback];
+            } else {
+                [ws upload:uploadUrl messageId:msgId file:[NSString stringWithUTF8String:tmsg.content.localMediaPath.c_str()] remoteUrl:downloadUrl fileSize:fileSize callback:callback];
+            }
+        } error:^(int error_code) {
+            errorBlock(error_code);
+        }];
+    } else {
+        mars::stn::sendMessage(tmsg, new IMSendMessageCallback(message, successBlock, progressBlock, errorBlock), expireDuration);
+    }
     
     return message;
+}
+
+
+- (void)upload:(NSString *)url messageId:(long)messageId file:(NSString *)file remoteUrl:(NSString *)remoteUrl fileSize:(int)fileSize callback:(IMSendMessageCallback *)callback {
+    NSURL *presignedURL = [NSURL URLWithString:url];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:presignedURL];
+    request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    [request setHTTPMethod:@"PUT"];
+    NSString *fileContentTypeString = @"application/octet-stream";
+    [request setValue:fileContentTypeString forHTTPHeaderField:@"Content-Type"];
+
+    WFCUUploadModel *model = [[WFCUUploadModel alloc] init];
+    model.fileSize = fileSize;
+    model->_sendCallback = callback;
+    __weak typeof(self)ws = self;
+    model.uploadTask = [[NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration] delegate:model delegateQueue:nil] uploadTaskWithRequest:request fromFile:[NSURL fileURLWithPath:file] completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [ws.uploadingModelMap removeObjectForKey:@(messageId)];
+            if(error) {
+                NSLog(@"error %@", error.localizedDescription);
+                [model didUploadedFailed:-500];
+            } else {
+                NSLog(@"done");
+                if(((NSHTTPURLResponse *)response).statusCode != 200) {
+                    NSLog(@"upload failure");
+                    [model didUploadedFailed:(int)((NSHTTPURLResponse *)response).statusCode];
+                } else {
+                    NSLog(@"upload success %@", remoteUrl);
+                    [model didUploaded:remoteUrl];
+                }
+            }
+        });
+    }];
+    
+    [model.uploadTask resume];
+    [self.uploadingModelMap setObject:model forKey:@(messageId)];
+}
+
+- (void)uploadQiniu:(NSString *)url messageId:(long)messageId file:(NSString *)file remoteUrl:(NSString *)remoteUrl fileSize:(int)fileSize callback:(IMSendMessageCallback *)callback {
+    NSArray *array = [url componentsSeparatedByString:@"?"];
+    url = array[0];
+    NSString *token = array[1];
+    NSString *key = array[2];
+
+    WFAFHTTPSessionManager *manage = [WFAFHTTPSessionManager manager];
+    [manage.requestSerializer setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+    manage.requestSerializer = [WFAFHTTPRequestSerializer serializer];
+    manage.responseSerializer = [WFAFHTTPResponseSerializer serializer];
+    manage.responseSerializer.acceptableContentTypes = [NSSet setWithObjects:@"application/json", @"text/html", @"text/json", @"text/javascript",@"text/plain", nil];
+
+    __weak typeof(self)ws = self;
+    NSURLSessionDataTask *task = [manage POST:url parameters:nil constructingBodyWithBlock:^(id<WFAFMultipartFormData>  _Nonnull formData) {
+        [formData appendPartWithFormData:[key dataUsingEncoding:NSUTF8StringEncoding] name:@"key"];
+        [formData appendPartWithFormData:[token dataUsingEncoding:NSUTF8StringEncoding] name:@"token"];
+        [formData appendPartWithFileURL:[NSURL fileURLWithPath:file] name:@"file" fileName:@"fileName" mimeType:@"application/octet-stream" error:nil];
+    } progress:^(NSProgress * _Nonnull uploadProgress) {
+            callback->onProgress((int)uploadProgress.completedUnitCount, (int)uploadProgress.totalUnitCount);
+    } success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+            [ws.uploadingModelMap removeObjectForKey:@(messageId)];
+            WFCCMediaMessageContent *mediaContent = (WFCCMediaMessageContent *)callback->m_message.content;
+            mediaContent.remoteUrl = remoteUrl;
+            [[WFCCIMService sharedWFCIMService] updateMessage:callback->m_message.messageId content:callback->m_message.content];
+            callback->onMediaUploaded([remoteUrl UTF8String]);
+            [[WFCCIMService sharedWFCIMService] sendSavedMessage:callback->m_message expireDuration:0 success:callback->m_successBlock error:callback->m_errorBlock];
+    } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
+            NSLog(@"error %@", error.localizedDescription);
+            [[WFCCIMService sharedWFCIMService] updateMessage:callback->m_message.messageId status:Message_Status_Send_Failure];
+            [ws.uploadingModelMap removeObjectForKey:@(messageId)];
+            callback->onFalure(-1);
+    }];
+    [self.uploadingModelMap setObject:task forKey:@(messageId)];
 }
 
 - (BOOL)sendSavedMessage:(WFCCMessage *)message
@@ -933,6 +1174,27 @@ static void fillTMessage(mars::stn::TMessage &tmsg, WFCCConversation *conv, WFCC
     } else {
         return NO;
     }
+}
+
+- (BOOL)cancelSendingMessage:(long)messageId {
+    BOOL canceled = mars::stn::cancelSendingMessage(messageId)?YES:NO;
+    if(!canceled) {
+        NSObject *upload = [self.uploadingModelMap objectForKey:@(messageId)];
+        if(upload) {
+            if([upload isKindOfClass:[WFCUUploadModel class]]) {
+                [self.uploadingModelMap removeObjectForKey:@(messageId)];
+                WFCUUploadModel *uploadModel = (WFCUUploadModel *)upload;
+                [uploadModel.uploadTask cancel];
+                return YES;
+            } else if([upload isKindOfClass:[NSURLSessionDataTask class]]) {
+                [self.uploadingModelMap removeObjectForKey:@(messageId)];
+                NSURLSessionDataTask *task = (NSURLSessionDataTask *)upload;
+                [task cancel];
+                return YES;
+            }
+        }
+    }
+    return canceled;
 }
 
 - (void)recall:(WFCCMessage *)msg
@@ -1275,13 +1537,6 @@ static void fillTMessage(mars::stn::TMessage &tmsg, WFCCConversation *conv, WFCC
     return ret;
 }
 
-- (long long)getMessageDeliveryByUser:(NSString *)userId {
-    if(!userId) {
-        return 0;
-    }
-    return mars::stn::MessageDB::Instance()->GetDelivery([userId UTF8String]);
-}
-
 - (BOOL)updateMessage:(long)messageId status:(WFCCMessageStatus)status {
     bool updated = mars::stn::MessageDB::Instance()->updateMessageStatus(messageId, (mars::stn::MessageStatus)status);
     if(updated) {
@@ -1300,6 +1555,9 @@ static void fillTMessage(mars::stn::TMessage &tmsg, WFCCConversation *conv, WFCC
 
 - (void)clearMessages:(WFCCConversation *)conversation before:(int64_t)before {
     mars::stn::MessageDB::Instance()->ClearMessages((int)conversation.type, conversation.target.length ? [conversation.target UTF8String] : "", conversation.line, before);
+}
+- (void)clearAllMessages:(BOOL)removeConversation {
+    mars::stn::MessageDB::Instance()->ClearAllMessages(removeConversation);
 }
 - (void)setConversation:(WFCCConversation *)conversation top:(BOOL)top
                 success:(void(^)(void))successBlock
@@ -1537,6 +1795,7 @@ WFCCGroupInfo *convertProtoGroupInfo(const mars::stn::TGroupInfo &tgi) {
     groupInfo.extra = [NSString stringWithUTF8String:tgi.extra.c_str()];;
     groupInfo.portrait = [NSString stringWithUTF8String:tgi.portrait.c_str()];
     groupInfo.owner = [NSString stringWithUTF8String:tgi.owner.c_str()];
+    groupInfo.remark = [NSString stringWithUTF8String:tgi.remark.c_str()];
     groupInfo.memberCount = tgi.memberCount;
     groupInfo.mute = tgi.mute;
     groupInfo.joinType = tgi.joinType;
@@ -2599,6 +2858,17 @@ public:
     mars::stn::MuteOrAllowGroupMember([groupId UTF8String], memberList, isSet, true, lines, tcontent, new IMGeneralOperationCallback(successBlock, errorBlock));
 }
 
+- (NSString *)getGroupRemark:(NSString *)groupId {
+    return [NSString stringWithUTF8String:mars::stn::getGroupRemark([groupId UTF8String]).c_str()];
+}
+
+- (void)setGroup:(NSString *)groupId
+          remark:(NSString *)remark
+         success:(void(^)(void))successBlock
+           error:(void(^)(int error_code))errorBlock {
+    mars::stn::setGroupRemark([groupId UTF8String], remark.length?[remark UTF8String]:"", new IMSetGroupRemarkCallback(groupId, successBlock, errorBlock));
+}
+
 - (NSArray<NSString *> *)getFavGroups {
     NSDictionary *favGroupDict = [[WFCCIMService sharedWFCIMService] getUserSettings:UserSettingScope_Favourite_Group];
     NSMutableArray *ids = [[NSMutableArray alloc] init];
@@ -2623,6 +2893,9 @@ public:
 }
 - (WFCCGroupInfo *)getGroupInfo:(NSString *)groupId refresh:(BOOL)refresh {
     if (!groupId) {
+        return nil;
+    }
+    if(![groupId isKindOfClass:NSString.class]) {
         return nil;
     }
     mars::stn::TGroupInfo tgi = mars::stn::MessageDB::Instance()->GetGroupInfo([groupId UTF8String], refresh);
@@ -2712,6 +2985,12 @@ public:
 }
 
 - (WFCCMessageContent *)messageContentFromPayload:(WFCCMessagePayload *)payload {
+    if(self.rawMessage) {
+        WFCCRawMessageContent *rawContent = [[WFCCRawMessageContent alloc] init];
+        rawContent.payload = payload;
+        return rawContent;
+    }
+    
     int contenttype = payload.contentType;
     Class contentClass = self.MessageContentMaps[@(contenttype)];
     if (contentClass != nil) {
@@ -2796,10 +3075,13 @@ public:
     int contenttype;
     if (class_getClassMethod(contentClass, @selector(getContentType))) {
         contenttype = [contentClass getContentType];
-        if(self.MessageContentMaps[@(contenttype)]) {
+        if(self.MessageContentMaps[@(contenttype)] && ![contentClass isEqual:self.MessageContentMaps[@(contenttype)]]) {
             NSLog(@"****************************************");
             NSLog(@"Error, duplicate message content type %d", contenttype);
             NSLog(@"****************************************");
+#if DEBUG
+            @throw [[NSException alloc] initWithName:@"重复定义消息" reason:[NSString stringWithFormat:@"消息类型(%d)重复定义在消息(%@)和(%@)中", contenttype, NSStringFromClass(contentClass), NSStringFromClass(self.MessageContentMaps[@(contenttype)])] userInfo:nil];
+#endif
         }
         self.MessageContentMaps[@(contenttype)] = contentClass;
         int contentflag = [contentClass getContentFlags];
@@ -2807,6 +3089,10 @@ public:
     } else {
         return;
     }
+}
+
+- (void)registerMessageFlag:(int)contentType flag:(int)contentFlag {
+    mars::stn::MessageDB::Instance()->RegisterMessageFlag(contentType, contentFlag);
 }
 
 - (void)joinChatroom:(NSString *)chatroomId
@@ -2958,6 +3244,56 @@ public:
     return ids;
 }
 
+- (void)getRemoteListenedChannels:(void(^)(NSArray<NSString *> *))successBlock error:(void(^)(int errorCode))errorBlock {
+    mars::stn::getListenedChannels(new IMGeneralStringListCallback(successBlock, errorBlock));
+}
+
+- (void)createSecretChat:(NSString *)userId
+                success:(void(^)(NSString *targetId, int line))successBlock
+                  error:(void(^)(int error_code))errorBlock {
+    mars::stn::createSecretChat([userId UTF8String], new IMCreateSecretChatCallback(successBlock, errorBlock));
+}
+
+- (void)destroySecretChat:(NSString *)targetId
+                  success:(void(^)(void))successBlock
+                    error:(void(^)(int error_code))errorBlock {
+    mars::stn::destroySecretChat([targetId UTF8String], new IMGeneralOperationCallback(successBlock, errorBlock));
+}
+
+- (WFCCSecretChatInfo *)getSecretChatInfo:(NSString *)targetId {
+    mars::stn::TSecretChatInfo t = mars::stn::MessageDB::Instance()->GetSecretChatInfo([targetId UTF8String]);
+    if(t.targetId.empty()) {
+        return nil;
+    }
+    WFCCSecretChatInfo *info = [[WFCCSecretChatInfo alloc] init];
+    info.targetId = targetId;
+    info.userId = [NSString stringWithUTF8String:t.userId.c_str()];
+    info.state = (WFCCSecretChatState)t.state;
+    info.burnTime = t.burnTime;
+    info.createTime = t.createTime;
+    return info;
+}
+
+- (NSData *)encodeSecretChat:(NSString *)targetId mediaData:(NSData *)data {
+    std::string sd = mars::stn::encodeSecretChatMediaData([targetId UTF8String], (const unsigned char *)data.bytes, (int)data.length);
+    if(sd.empty()) {
+        return nil;
+    }
+    return [[NSData alloc] initWithBytes:sd.data() length:sd.length()];
+}
+
+- (NSData *)decodeSecretChat:(NSString *)targetId mediaData:(NSData *)encryptData {
+    std::string sd = mars::stn::decodeSecretChatMediaData([targetId UTF8String], (const unsigned char *)encryptData.bytes, (int)encryptData.length);
+    if(sd.empty()) {
+        return nil;
+    }
+    return [[NSData alloc] initWithBytes:sd.data() length:sd.length()];
+}
+
+- (void)setSecretChat:(NSString *)targetId burnTime:(int)millisecond {
+    mars::stn::MessageDB::Instance()->SetSecretChatBurnTime([targetId UTF8String], millisecond);
+}
+
 - (NSArray<WFCCPCOnlineInfo *> *)getPCOnlineInfos {
     NSString *pcOnline = [self getUserSetting:UserSettingScope_PC_Online key:@"PC"];
     NSString *webOnline = [self getUserSetting:UserSettingScope_PC_Online key:@"Web"];
@@ -3016,6 +3352,7 @@ public:
 - (void)getConversationFiles:(WFCCConversation *)conversation
                     fromUser:(NSString *)userId
             beforeMessageUid:(long long)messageUid
+                       order:(WFCCFileRecordOrder)order
                        count:(int)count
                      success:(void(^)(NSArray<WFCCFileRecord *> *files))successBlock
                        error:(void(^)(int error_code))errorBlock {
@@ -3025,18 +3362,20 @@ public:
     conv.conversationType = (int)conversation.type;
     
     std::string fromUser = userId ? [userId UTF8String] : "";
-    mars::stn::loadConversationFileRecords(conv, fromUser, messageUid, count, new IMLoadFileRecordCallback(successBlock, errorBlock));
+    mars::stn::loadConversationFileRecords(conv, fromUser, messageUid, (int)order, count, new IMLoadFileRecordCallback(successBlock, errorBlock));
 }
 
 - (void)getMyFiles:(long long)beforeMessageUid
+             order:(WFCCFileRecordOrder)order
              count:(int)count
            success:(void(^)(NSArray<WFCCFileRecord *> *files))successBlock
              error:(void(^)(int error_code))errorBlock {
-    mars::stn::loadMyFileRecords(beforeMessageUid, count, new IMLoadFileRecordCallback(successBlock, errorBlock));
+    mars::stn::loadMyFileRecords(beforeMessageUid, (int)order, count, new IMLoadFileRecordCallback(successBlock, errorBlock));
 }
 
 - (void)searchMyFiles:(NSString *)keyword
      beforeMessageUid:(long long)beforeMessageUid
+                order:(WFCCFileRecordOrder)order
                 count:(int)count
               success:(void(^)(NSArray<WFCCFileRecord *> *files))successBlock
                 error:(void(^)(int error_code))errorBlock {
@@ -3046,7 +3385,7 @@ public:
         }
         return;
     }
-    mars::stn::searchMyFileRecords([keyword UTF8String], beforeMessageUid, count, new IMLoadFileRecordCallback(successBlock, errorBlock));
+    mars::stn::searchMyFileRecords([keyword UTF8String], beforeMessageUid, (int)order, count, new IMLoadFileRecordCallback(successBlock, errorBlock));
 }
 
 - (void)deleteFileRecord:(long long)messageUid
@@ -3059,6 +3398,7 @@ public:
        conversation:(WFCCConversation *)conversation
            fromUser:(NSString *)userId
    beforeMessageUid:(long long)messageUid
+              order:(WFCCFileRecordOrder)order
               count:(int)count
             success:(void(^)(NSArray<WFCCFileRecord *> *files))successBlock
               error:(void(^)(int error_code))errorBlock {
@@ -3074,7 +3414,7 @@ public:
     conv.conversationType = (int)conversation.type;
     
     std::string fromUser = userId ? [userId UTF8String] : "";
-    mars::stn::searchConversationFileRecords([keyword UTF8String], conv, fromUser, messageUid, count, new IMLoadFileRecordCallback(successBlock, errorBlock));
+    mars::stn::searchConversationFileRecords([keyword UTF8String], conv, fromUser, messageUid, (int)order, count, new IMLoadFileRecordCallback(successBlock, errorBlock));
 }
 
 - (void)getAuthorizedMediaUrl:(long long)messageUid
@@ -3083,6 +3423,24 @@ public:
                       success:(void(^)(NSString *authorizedUrl, NSString *backupAuthorizedUrl))successBlock
                         error:(void(^)(int error_code))errorBlock {
     mars::stn::getAuthorizedMediaUrl(messageUid, (int)mediaType, [mediaPath UTF8String], new IMGetAuthorizedMediaUrlCallback(successBlock, errorBlock));
+}
+
+- (void)getAuthCode:(NSString *)applicationId
+               type:(int)type
+               host:(NSString *)host
+            success:(void(^)(NSString *authCode))successBlock
+              error:(void(^)(int error_code))errorBlock {
+    mars::stn::GetAuthCode([applicationId UTF8String], type, [host UTF8String], new IMGeneralStringCallback(successBlock, errorBlock));
+}
+
+- (void)configApplication:(NSString *)applicationId
+                     type:(int)type
+                timestamp:(int64_t)timestamp
+                    nonce:(NSString *)nonce
+                signature:(NSString *)signature
+            success:(void(^)(void))successBlock
+                    error:(void(^)(int error_code))errorBlock {
+    mars::stn::ApplicationConfig([applicationId UTF8String], type, timestamp, [nonce UTF8String], [signature UTF8String], new IMGeneralOperationCallback(successBlock, errorBlock));
 }
 
 - (NSData *)getWavData:(NSString *)amrPath {
@@ -3203,6 +3561,21 @@ public:
 
 - (BOOL)isEnableUserOnlineState {
     return mars::stn::IsEnableUserOnlineState();
+}
+
+- (BOOL)isEnableSecretChat {
+    return mars::stn::IsEnableSecretChat();
+}
+
+- (BOOL)isUserEnableSecretChat {
+    NSString *strValue = [[WFCCIMService sharedWFCIMService] getUserSetting:UserSettingScope_Disable_Secret_Chat key:@""];
+    return ![strValue isEqualToString:@"1"];
+}
+
+- (void)setUserEnableSecretChat:(BOOL)enable
+                    success:(void(^)(void))successBlock
+                      error:(void(^)(int error_code))errorBlock {
+    [[WFCCIMService sharedWFCIMService] setUserSetting:UserSettingScope_Disable_Secret_Chat key:@"" value:enable?@"0":@"1" success:successBlock error:errorBlock];
 }
 
 - (void)sendConferenceRequest:(long long)sessionId

@@ -29,7 +29,7 @@
     }
     self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
     [self.view addSubview:self.tableView];
-    self.conversations = [[WFCCIMService sharedWFCIMService] getConversationInfos:@[@(Single_Type),@(Group_Type)] lines:@[@(0)]];
+    self.conversations = [[WFCCIMService sharedWFCIMService] getConversationInfos:@[@(Single_Type),@(Group_Type),@(SecretChat_Type)] lines:@[@(0)]];
     [self.tableView reloadData];
 }
 
@@ -55,12 +55,23 @@
         [cell.imageView sd_setImageWithURL:[NSURL URLWithString:user.portrait] placeholderImage: [UIImage imageNamed:@"PersonalChat"]];
     } else if (conv.conversation.type == Group_Type) {
         WFCCGroupInfo *group = [[WFCCIMService sharedWFCIMService] getGroupInfo:conv.conversation.target refresh:NO];
-        if (group.name.length) {
-            cell.textLabel.text = group.name;
+        if (group.displayName.length) {
+            cell.textLabel.text = group.displayName;
         } else {
             cell.textLabel.text = @"群组";
         }
         [cell.imageView sd_setImageWithURL:[NSURL URLWithString:group.portrait] placeholderImage: [UIImage imageNamed:@"group_default_portrait"]];
+    } else if (conv.conversation.type == SecretChat_Type) {
+        NSString *userId = [[WFCCIMService sharedWFCIMService] getSecretChatInfo:conv.conversation.target].userId;
+        WFCCUserInfo *user = [[WFCCIMService sharedWFCIMService] getUserInfo:userId refresh:NO];
+        if (user.friendAlias.length) {
+            cell.textLabel.text = user.friendAlias;
+        } else if(user.displayName.length) {
+            cell.textLabel.text = user.displayName;
+        } else {
+            cell.textLabel.text = @"用户";
+        }
+        [cell.imageView sd_setImageWithURL:[NSURL URLWithString:user.portrait] placeholderImage: [UIImage imageNamed:@"PersonalChat"]];
     }
     
     return cell;

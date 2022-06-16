@@ -11,6 +11,7 @@
 "Message"="Message";
 "NumberOfMessage"="Message(%d)";
 "GroupName"="Group name";
+"GroupRemark"="Group remark";
 "Back"="Back";
 "BackMore"="Back(...)";
 "BackNumber"="Back(%ld)";
@@ -75,6 +76,8 @@
 "MsgReceipt"="Message receipt";
 "Delete"="Delete";
 "Deleting"="Deleting";
+"Loading"="Loading";
+"LoadFailure"="Load failure";
 "DeleteLocalMsg"="Only delete local message";
 "DeleteRemoteMsg"="Delete remote message also";
 "DeleteFailed"="Delete failed";
@@ -91,6 +94,7 @@
 "Etc"="etc.";
 "Search"="Search";
 "StartChat"="Start chat";
+"StartSecretChat"="Start secret chat";
 "ScanQRCode"="Scan QR code";
 "NotLogin"="Not login";
 "NotConnect"="Not connect";
@@ -117,6 +121,7 @@
 "ModifyGroupName"="Modify group name";
 "OnlyManangerCanChangeGroupPortraitHint"="Only manager change group portrait";
 "ModifyMyGroupNameCard"="Modify my group namecard";
+"ModifyGroupRemark"="Modify group remark";
 "ConfirmDelete"="Confirm delete";
 "Deleted"="Deleted";
 "Manager"="Manager";

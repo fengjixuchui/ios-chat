@@ -13,7 +13,7 @@
 #import "PCSessionViewController.h"
 #import <WFChatUIKit/WFChatUIKit.h>
 #import "SharePredefine.h"
-
+#import <WebKit/WebKit.h>
 
 static AppService *sharedSingleton = nil;
 
@@ -67,6 +67,29 @@ static AppService *sharedSingleton = nil;
     }];
 }
 
+- (void)sendDestroyAccountCode:(void(^)(void))successBlock error:(void(^)(int errorCode, NSString *message))errorBlock {
+    [self post:@"/send_destroy_code" data:nil isLogin:NO success:^(NSDictionary *dict) {
+        if([dict[@"code"] intValue] == 0) {
+            if(successBlock) successBlock();
+        } else {
+            if(errorBlock) errorBlock([dict[@"code"] intValue], @"error");
+        }
+    } error:^(NSError * _Nonnull error) {
+        if(errorBlock) errorBlock(-1, error.localizedDescription);
+    }];
+}
+
+- (void)destroyAccount:(NSString *)code success:(void(^)(void))successBlock error:(void(^)(int errorCode, NSString *message))errorBlock {
+    [self post:@"/destroy" data:@{@"code":code} isLogin:NO success:^(NSDictionary *dict) {
+        if([dict[@"code"] intValue] == 0) {
+            if(successBlock) successBlock();
+        } else {
+            if(errorBlock) errorBlock([dict[@"code"] intValue], @"error");
+        }
+    } error:^(NSError * _Nonnull error) {
+        if(errorBlock) errorBlock(-1, error.localizedDescription);
+    }];
+}
 
 - (void)pcScaned:(NSString *)sessionId success:(void(^)(void))successBlock error:(void(^)(int errorCode, NSString *message))errorBlock {
     NSString *path = [NSString stringWithFormat:@"/scan_pc/%@", sessionId];
@@ -528,12 +551,17 @@ static AppService *sharedSingleton = nil;
     
     NSUserDefaults *sharedDefaults = [[NSUserDefaults alloc] initWithSuiteName:WFC_SHARE_APP_GROUP_ID];//此处id要与开发者中心创建时一致
         
-    //1. 保存app cookies
-    
-        [sharedDefaults removeObjectForKey:WFC_SHARE_APPSERVICE_AUTH_TOKEN];
+    [sharedDefaults removeObjectForKey:WFC_SHARE_APPSERVICE_AUTH_TOKEN];
     NSArray<NSHTTPCookie *> *cookies = [[NSHTTPCookieStorage sharedCookieStorageForGroupContainerIdentifier:WFC_SHARE_APP_GROUP_ID] cookies];
     [cookies enumerateObjectsUsingBlock:^(NSHTTPCookie * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
         [[NSHTTPCookieStorage sharedCookieStorageForGroupContainerIdentifier:WFC_SHARE_APP_GROUP_ID] deleteCookie:obj];
+    }];
+    
+
+    [[WKWebsiteDataStore defaultDataStore] fetchDataRecordsOfTypes:[WKWebsiteDataStore allWebsiteDataTypes] completionHandler:^(NSArray * __nonnull records) {
+        for (WKWebsiteDataRecord *record in records) {
+            [[WKWebsiteDataStore defaultDataStore] removeDataOfTypes:record.dataTypes forDataRecords:@[record] completionHandler:^{}];
+        }
     }];
 }
 

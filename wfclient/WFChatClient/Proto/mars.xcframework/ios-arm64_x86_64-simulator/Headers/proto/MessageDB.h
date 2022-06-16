@@ -19,6 +19,7 @@ namespace mars {
         class SyncReadEntry;
         class RecyclableStatement;
         class DB2;
+        class SyncBurnReadedEntry;
         class MessageDB {
             
         private:
@@ -60,6 +61,7 @@ namespace mars {
             
             bool ClearMessages(int conversationType, const std::string &target, int line);
             bool ClearMessages(int conversationType, const std::string &target, int line, int64_t before);
+            bool ClearAllMessages(bool removeConveration);
             
             long GetConversationFirstUnreadMessageId(int conversationType, const std::string &target, int line);
             std::list<TMessage> GetMessages(int conversationType, const std::string &target, int line, const std::list<int> &contentTypes, bool desc, int count, int64_t startPoint, const std::string &withUser);
@@ -186,12 +188,43 @@ namespace mars {
             
             std::map<std::string, int64_t> GetConversationRead(int conversationType, const std::string &target, int line);
             std::map<std::string, int64_t> GetDelivery(int conversationType, const std::string &target);
-            int64_t GetDelivery(std::string userId);
+            int64_t GetSingleDelivery(const std::string &userId);
+            std::map<std::string, int64_t> GetGroupDelivery(const std::string &targetId);
             
             long saveConversationSync(int conversatinType, const std::string &target, int line, int64_t readedDt, const std::list<std::string> &senders);
             SyncReadEntry loadConversationSync();
             bool deleteConvSync(long _id);
             bool updateConversationLastMessage(int conversationType, const std::string &target, int line, bool forceUpdate = false);
+            
+            TSecretChatInfo GetSecretChatInfo(const std::string &targetId);
+            bool SetSecretChatBurnTime(const std::string &targetId, int ms);
+            
+            std::pair<int, int64_t> GetMessageBurnTime(long messageId);
+            
+            int getSecretChatBurnTime(const std::string &targetId);
+            bool createSecretChat(const std::string &targetId, const std::string &userId, const std::string dhx);
+            bool acceptSecretChat(const std::string &targetId, const std::string &userId);
+            bool establishedSecretChat(const std::string &targetId, const std::string &userId, const std::string dhkey);
+            bool cancelSecretChat(const std::string &targetId, const std::string &userId);
+            bool removeSecretChat(const std::string &targetId);
+
+            std::string getSecretChatX(const std::string &targetId);
+            std::string getSecretChatKey(const std::string &targetId);
+            
+            bool insertBurnMessageInfo(long messageId, int64_t messageUid, const std::string &targetId, int direction, int burnTime, int media, int64_t messageDt);
+            TBurnMessageInfo getBurnMessageInfo(long messageId);
+            int64_t burnMessageReaded(const std::string &targetId, int direction, int64_t readDt = 0, int64_t msgDt = 0);
+            int64_t getBurnMessageReadTime(const std::string &targetId);
+            int64_t burnMessagePlayed(long messageId, int64_t readDt = 0);
+            std::list<long> getBurnedMessage(int64_t dt);
+            int removeBurnedMessageInfo(int64_t dt);
+            int64_t getLastestBurnMessageTime();
+            long insertSyncBurnReaded(int type, const std::string &target, int line, int64_t readDt, int64_t value);
+            bool deleteSyncBurnReaded(long sid);
+            SyncBurnReadedEntry getSyncBurnReadedEntry();
+            
+            void _OnCheckBurn();
+            friend DB2;
         private:
             int64_t GetGroupMembersMaxDt(const std::string &groupId);
             bool GetConversationSilent(int conversationType, const std::string &target, int line);
@@ -201,13 +234,14 @@ namespace mars {
             bool clearConversationUnread(const std::list<int> &conversationTypes, const std::list<int> &lines, bool clearLastMessageId = false);
             bool clearAllConversationUnread(bool clearLastMessageId = false);
             void getMsgFromStateMent(DB2 *db, RecyclableStatement &statementHandle, TMessage &msg);
-            
+            void startBurnMessageCheck();
+            void stopBurnMessageCheck();
             static MessageDB* instance_;
         };
     
         class UpdateConversationData {
         public:
-            UpdateConversationData() : conversationType(0), target(""), line(0), timestamp(0), lastMessageId(0), unreadCount(false), unreadMention(false), unreadMentionAll(false), isRecall(false) {}
+            UpdateConversationData() : conversationType(0), target(""), line(0), timestamp(0), lastMessageId(0), unreadCount(false), unreadMention(false), unreadMentionAll(false), isRecallOrDelete(false) {}
             virtual ~UpdateConversationData() {}
         public:
             int conversationType;
@@ -218,7 +252,7 @@ namespace mars {
             bool unreadCount;
             bool unreadMention;
             bool unreadMentionAll;
-            bool isRecall;
+            bool isRecallOrDelete;
         };
     }
 }

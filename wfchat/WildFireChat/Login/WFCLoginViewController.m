@@ -18,19 +18,6 @@
 #import "UIColor+YH.h"
 #import "UIFont+YH.h"
 
-//是否iPhoneX YES:iPhoneX屏幕 NO:传统屏幕
-#define kIs_iPhoneX ([UIScreen mainScreen].bounds.size.height == 812.0f ||[UIScreen mainScreen].bounds.size.height == 896.0f ||[UIScreen mainScreen].bounds.size.height == 844.0f ||[UIScreen mainScreen].bounds.size.height == 926.0f)
-
-#define kStatusBarAndNavigationBarHeight (kIs_iPhoneX ? 88.f : 64.f)
-
-#define  kTabbarSafeBottomMargin        (kIs_iPhoneX ? 34.f : 0.f)
-
-#define HEXCOLOR(rgbValue)                                                                                             \
-[UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16)) / 255.0                                               \
-green:((float)((rgbValue & 0xFF00) >> 8)) / 255.0                                                  \
-blue:((float)(rgbValue & 0xFF)) / 255.0                                                           \
-alpha:1.0]
-
 @interface WFCLoginViewController () <UITextFieldDelegate>
 @property (strong, nonatomic) UILabel *hintLabel;
 @property (strong, nonatomic) UITextField *userNameField;
