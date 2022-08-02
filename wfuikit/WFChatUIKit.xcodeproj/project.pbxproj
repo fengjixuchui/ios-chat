@@ -104,7 +104,7 @@
 		2F1439F5217F5DAA00B3E38A /* WFCUSearchGroupTableViewCell.h in Headers */ = {isa = PBXBuildFile; fileRef = 2F1439F3217F5DAA00B3E38A /* WFCUSearchGroupTableViewCell.h */; };
 		2F1439F6217F5DAA00B3E38A /* WFCUSearchGroupTableViewCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 2F1439F4217F5DAA00B3E38A /* WFCUSearchGroupTableViewCell.m */; };
 		2F1EB5B22499A21A00FD3575 /* WFCUConferenceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2F1EB5B02499A21A00FD3575 /* WFCUConferenceViewController.m */; };
-		2F1EB5B32499A21A00FD3575 /* WFCUConferenceViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = 2F1EB5B12499A21A00FD3575 /* WFCUConferenceViewController.h */; };
+		2F1EB5B32499A21A00FD3575 /* WFCUConferenceViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = 2F1EB5B12499A21A00FD3575 /* WFCUConferenceViewController.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		2F1EB5B72499A30500FD3575 /* WFCUCreateConferenceViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = 2F1EB5B52499A30500FD3575 /* WFCUCreateConferenceViewController.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		2F1EB5B82499A30500FD3575 /* WFCUCreateConferenceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2F1EB5B62499A30500FD3575 /* WFCUCreateConferenceViewController.m */; };
 		2F1EB5BB2499AA5E00FD3575 /* WFCUConferenceInviteViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = 2F1EB5B92499AA5E00FD3575 /* WFCUConferenceInviteViewController.h */; };
@@ -426,6 +426,14 @@
 		9029D0FF21C5D7930002EBAA /* WFCUCreateChannelViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9029D0FD21C5D7930002EBAA /* WFCUCreateChannelViewController.m */; };
 		90414AFC21AF5A93008EF915 /* WFCUConversationSearchTableViewCell.h in Headers */ = {isa = PBXBuildFile; fileRef = 90414AFA21AF5A93008EF915 /* WFCUConversationSearchTableViewCell.h */; };
 		90414AFD21AF5A93008EF915 /* WFCUConversationSearchTableViewCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 90414AFB21AF5A93008EF915 /* WFCUConversationSearchTableViewCell.m */; };
+		B707758D2881ABB1004034A5 /* unicode_to_hanyu_pinyin.txt in Resources */ = {isa = PBXBuildFile; fileRef = 2B5E94FF25B8274D00317D53 /* unicode_to_hanyu_pinyin.txt */; };
+		B707758E2881ABB1004034A5 /* WFChatUIKit.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 14349F61243392E300FE38B3 /* WFChatUIKit.xcassets */; };
+		B707758F2881ABB1004034A5 /* WFCUShareMessageView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2F55103C217F5CC100F56C26 /* WFCUShareMessageView.xib */; };
+		B70775902881ABB1004034A5 /* Stickers.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 2F143A68217F7D4100B3E38A /* Stickers.bundle */; };
+		B70775912881ABB1004034A5 /* Emoj.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2F143A69217F7D4100B3E38A /* Emoj.plist */; };
+		B70775922881ABB1004034A5 /* wfc.strings in Resources */ = {isa = PBXBuildFile; fileRef = 2BCEC52E232E10DF00D55E0D /* wfc.strings */; };
+		B707759928823635004034A5 /* WFCUImage.h in Headers */ = {isa = PBXBuildFile; fileRef = B707759728823635004034A5 /* WFCUImage.h */; };
+		B707759A28823635004034A5 /* WFCUImage.m in Sources */ = {isa = PBXBuildFile; fileRef = B707759828823635004034A5 /* WFCUImage.m */; };
 		B72FBB10283230F0005F2745 /* DSCallInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = B72FBB07283230EE005F2745 /* DSCallInfo.m */; };
 		B72FBB11283230F0005F2745 /* JSBUtil.h in Headers */ = {isa = PBXBuildFile; fileRef = B72FBB08283230EE005F2745 /* JSBUtil.h */; };
 		B72FBB12283230F0005F2745 /* JSBUtil.m in Sources */ = {isa = PBXBuildFile; fileRef = B72FBB09283230EE005F2745 /* JSBUtil.m */; };
@@ -448,6 +456,8 @@
 		B7D0758E2827570D008A6C63 /* WFCUMultiCallOngoingExpendedCell.m in Sources */ = {isa = PBXBuildFile; fileRef = B7D0758C2827570D008A6C63 /* WFCUMultiCallOngoingExpendedCell.m */; };
 		B7D8F7302783024E00752426 /* ZLPhotoBrowser.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7D8F72F2783024E00752426 /* ZLPhotoBrowser.xcframework */; };
 		B7D8F7352783032F00752426 /* SDWebImage.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7D8F7342783032F00752426 /* SDWebImage.xcframework */; };
+		B7FB0D832897734300625747 /* WFCUFileVideoSource.h in Headers */ = {isa = PBXBuildFile; fileRef = B7FB0D812897734300625747 /* WFCUFileVideoSource.h */; };
+		B7FB0D842897734300625747 /* WFCUFileVideoSource.m in Sources */ = {isa = PBXBuildFile; fileRef = B7FB0D822897734300625747 /* WFCUFileVideoSource.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -879,6 +889,8 @@
 		9029D0FD21C5D7930002EBAA /* WFCUCreateChannelViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = WFCUCreateChannelViewController.m; path = WFChatUIKit/CreateGroup/ViewController/WFCUCreateChannelViewController.m; sourceTree = SOURCE_ROOT; };
 		90414AFA21AF5A93008EF915 /* WFCUConversationSearchTableViewCell.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WFCUConversationSearchTableViewCell.h; sourceTree = "<group>"; };
 		90414AFB21AF5A93008EF915 /* WFCUConversationSearchTableViewCell.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = WFCUConversationSearchTableViewCell.m; sourceTree = "<group>"; };
+		B707759728823635004034A5 /* WFCUImage.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WFCUImage.h; sourceTree = "<group>"; };
+		B707759828823635004034A5 /* WFCUImage.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WFCUImage.m; sourceTree = "<group>"; };
 		B72FBB07283230EE005F2745 /* DSCallInfo.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DSCallInfo.m; sourceTree = "<group>"; };
 		B72FBB08283230EE005F2745 /* JSBUtil.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSBUtil.h; sourceTree = "<group>"; };
 		B72FBB09283230EE005F2745 /* JSBUtil.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = JSBUtil.m; sourceTree = "<group>"; };
@@ -901,6 +913,8 @@
 		B7D0758C2827570D008A6C63 /* WFCUMultiCallOngoingExpendedCell.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WFCUMultiCallOngoingExpendedCell.m; sourceTree = "<group>"; };
 		B7D8F72F2783024E00752426 /* ZLPhotoBrowser.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ZLPhotoBrowser.xcframework; sourceTree = "<group>"; };
 		B7D8F7342783032F00752426 /* SDWebImage.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = SDWebImage.xcframework; sourceTree = "<group>"; };
+		B7FB0D812897734300625747 /* WFCUFileVideoSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WFCUFileVideoSource.h; sourceTree = "<group>"; };
+		B7FB0D822897734300625747 /* WFCUFileVideoSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WFCUFileVideoSource.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1114,6 +1128,8 @@
 				2BEF789B23F6A84D000DE285 /* WFCUVideoViewController.m */,
 				2FF70EAA2402101000946D2D /* WFCUWaitingAnimationView.h */,
 				2FF70EAB2402101000946D2D /* WFCUWaitingAnimationView.m */,
+				B7FB0D812897734300625747 /* WFCUFileVideoSource.h */,
+				B7FB0D822897734300625747 /* WFCUFileVideoSource.m */,
 			);
 			path = Voip;
 			sourceTree = "<group>";
@@ -1832,6 +1848,8 @@
 				2F518FEE235ED5B300FA3D58 /* WFCUAppServiceProvider.h */,
 				2F638919254E3FE30084EEA6 /* WFCUFavoriteItem.h */,
 				2F63891A254E3FE30084EEA6 /* WFCUFavoriteItem.m */,
+				B707759728823635004034A5 /* WFCUImage.h */,
+				B707759828823635004034A5 /* WFCUImage.m */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -1986,6 +2004,7 @@
 				2F56F6BF252A088100B829C4 /* WFCUCompositeTextCell.h in Headers */,
 				2BD6D2FD25FF603B001F2E33 /* Predefine.h in Headers */,
 				2FB87A66265122F900790A26 /* WFCUEnum.h in Headers */,
+				2F1EB5B32499A21A00FD3575 /* WFCUConferenceViewController.h in Headers */,
 				2F551222217F5CC300F56C26 /* WFCUModifyMyProfileViewController.h in Headers */,
 				2F518FEF235ED5B300FA3D58 /* WFCUAppServiceProvider.h in Headers */,
 				2F56F6B42529EE0F00B829C4 /* WFCUCompositeMessageViewController.h in Headers */,
@@ -2072,6 +2091,7 @@
 				2F551227217F5CC300F56C26 /* WFCUFriendRequestViewController.h in Headers */,
 				2F551202217F5CC300F56C26 /* WFCUConversationSettingMemberCollectionViewLayout.h in Headers */,
 				2F551203217F5CC300F56C26 /* WFCUConversationTableViewCell.h in Headers */,
+				B707759928823635004034A5 /* WFCUImage.h in Headers */,
 				2F551196217F5CC200F56C26 /* SDRefresh.h in Headers */,
 				2F55120F217F5CC300F56C26 /* WFCUContactTableViewCell.h in Headers */,
 				2F55120E217F5CC300F56C26 /* WFCUNewFriendTableViewCell.h in Headers */,
@@ -2143,9 +2163,9 @@
 				2F551214217F5CC300F56C26 /* WFCUAddFriendViewController.h in Headers */,
 				1450EA8924389CA200BF51FC /* WFCUSeletedUserSearchResultViewController.h in Headers */,
 				2FD550EC2442AA0B00B3EE09 /* WFCURecallCell.h in Headers */,
+				B7FB0D832897734300625747 /* WFCUFileVideoSource.h in Headers */,
 				2FB7125425D9F83B00FD2E83 /* WFCUConferenceMemberManagerViewController.h in Headers */,
 				2F5511D7217F5CC300F56C26 /* TYAlertController.h in Headers */,
-				2F1EB5B32499A21A00FD3575 /* WFCUConferenceViewController.h in Headers */,
 				2F5510F4217F5CC200F56C26 /* CCHCenterOfMassMapClusterer.h in Headers */,
 				2F5510F6217F5CC200F56C26 /* CCHMapAnimator.h in Headers */,
 				2BDF57A424AD70C8003C1F08 /* DNImageFlowViewController.h in Headers */,
@@ -2219,7 +2239,6 @@
 				2F550BDB217F4D7B00F56C26 /* Sources */,
 				2F550BDC217F4D7B00F56C26 /* Frameworks */,
 				2F550BDD217F4D7B00F56C26 /* Resources */,
-				2F550BF6217F502600F56C26 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -2267,30 +2286,16 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B707758D2881ABB1004034A5 /* unicode_to_hanyu_pinyin.txt in Resources */,
+				B707758E2881ABB1004034A5 /* WFChatUIKit.xcassets in Resources */,
+				B707758F2881ABB1004034A5 /* WFCUShareMessageView.xib in Resources */,
+				B70775902881ABB1004034A5 /* Stickers.bundle in Resources */,
+				B70775912881ABB1004034A5 /* Emoj.plist in Resources */,
+				B70775922881ABB1004034A5 /* wfc.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		2F550BF6217F502600F56C26 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 12;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "bash xcodescript.sh\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		2F550BDB217F4D7B00F56C26 /* Sources */ = {
@@ -2325,6 +2330,7 @@
 				2F5510C6217F5CC200F56C26 /* WFCUFavGroupTableViewController.m in Sources */,
 				2BEF78A823F6A84D000DE285 /* WFCUFloatingWindow.m in Sources */,
 				2BD8D72624D69B5400281B81 /* WFCUFilesViewController.m in Sources */,
+				B707759A28823635004034A5 /* WFCUImage.m in Sources */,
 				149B3112241E65D500B935D3 /* UIFont+YH.m in Sources */,
 				2FD550ED2442AA0B00B3EE09 /* WFCURecallCell.m in Sources */,
 				2F5510A3217F5CC200F56C26 /* WFCUImageCell.m in Sources */,
@@ -2369,6 +2375,7 @@
 				1450EA862438922800BF51FC /* WFCUUserSectionKeySupport.m in Sources */,
 				2F5510F2217F5CC200F56C26 /* CCHMapClusterControllerUtils.m in Sources */,
 				2F55109A217F5CC200F56C26 /* WFCUVideoCell.m in Sources */,
+				B7FB0D842897734300625747 /* WFCUFileVideoSource.m in Sources */,
 				2F5510ED217F5CC200F56C26 /* WFCULocationPoint.m in Sources */,
 				2BDF57B824AD70C8003C1F08 /* DNSendButton.m in Sources */,
 				2F535C0025296E6600C9AF09 /* WFCUQuoteViewController.m in Sources */,

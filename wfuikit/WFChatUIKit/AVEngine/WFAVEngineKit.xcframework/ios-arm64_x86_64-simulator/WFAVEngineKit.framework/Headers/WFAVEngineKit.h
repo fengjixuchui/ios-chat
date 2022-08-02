@@ -313,6 +313,18 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
  发起屏幕共享失败
  */
 - (void)onScreenSharingFailure;
+
+/* 此属性没有意义，仅为了兼容UI代码 */
+- (RTCVideoFrame *_Nonnull)didCaptureVideoFrame:(RTCVideoFrame *_Nonnull)frame screenSharing:(BOOL)isScreenSharing;
+@end
+
+@protocol WFAVExternalFrameDelegate <NSObject>
+- (void)didCaptureVideoFrame:(nonnull RTCVideoFrame *)frame;
+@end
+
+@protocol WFAVExternalVideoSource <NSObject>
+- (void)startCapture:(id<WFAVExternalFrameDelegate>_Nonnull)delegate;
+- (void)stopCapture;
 @end
 
 #pragma mark - 通话引擎
@@ -414,6 +426,8 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
 /* 此属性没有意义，仅为了兼容UI代码 */
 @property(nonatomic, assign)BOOL screenSharingReplaceMode;
 
+/* 此属性没有意义，仅为了兼容UI代码 */
+@property(nonatomic, assign) BOOL forceUseEAGLView;
 
 /* 此函数没有意义，仅为了兼容UI代码 */
 - (WFAVCallSession *_Nonnull)startConference:(NSString *_Nullable)callId
@@ -467,6 +481,16 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
 - (void)dismissViewController:(UIViewController *)viewController;
 @end
 
+/*!
+ 兼容专业版，实际无意义
+ */
+typedef NS_ENUM(NSInteger, WFAVVodeoType) {
+    WFAVVodeoType_None,
+    WFAVVodeoType_BigStream,
+    WFAVVodeoType_SmallStream
+};
+
+
 @interface WFAVParticipantProfile : NSObject
 @property(nonatomic, strong, readonly)NSString *userId;
 @property(nonatomic, assign, readonly)long long startTime;
@@ -475,6 +499,10 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
 @property(nonatomic, assign, readonly)BOOL audioMuted;
 @property(nonatomic, assign, readonly)BOOL audience;
 @property(nonatomic, assign, readonly)BOOL screeSharing;
+//兼容专业版，实际无意义
+@property(nonatomic, strong, readonly)NSString * _Nullable callExtra;
+//兼容专业版，实际无意义
+@property(nonatomic, assign, readonly)WFAVVodeoType videoType;
 @end
 
 #pragma mark - 通话Session
@@ -560,6 +588,17 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
 @property(nonatomic, assign) BOOL defaultAudience;
 
 /**
+ 仅当会议有效
+*/
+@property(nonatomic, assign) WFAVVodeoType defaultVideoType;
+
+/**
+ 仅当会议有效
+*/
+@property(nonatomic, assign) BOOL autoSwitchVideoType;
+
+
+/**
 是否高级会议模式，仅当会议有效
 */
 @property(nonatomic, assign, getter=isAdvanced, readonly) BOOL advanced;
@@ -588,6 +627,10 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
  应用内屏幕分享。仅音视频高级版支持
  */
 @property(nonatomic, assign, getter=isInAppScreenSharing)BOOL inAppScreenSharing;
+/**
+ 应用内屏幕分享。仅音视频高级版支持
+ */
+@property(nonatomic, strong)id<WFAVExternalVideoSource> _Nullable externalVideoSource;
 
 /**
 呼叫附加信息
@@ -696,6 +739,8 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
  */
 - (void)setupRemoteVideoView:(UIView * _Nullable)videoContainerView scalingType:(WFAVVideoScalingType)scalingType forUser:(NSString * _Nonnull)userId screenSharing:(BOOL)screenSharing;
 
+/* 此函数没有意义，仅为了兼容UI代码 */
+- (void)setParticipant:(NSString * _Nonnull)userId screenSharing:(BOOL)isScreenSharing videoType:(WFAVVodeoType)videoType;
 
 /* 此函数没有意义，仅为了兼容UI代码 */
 - (void)leaveConference:(BOOL)destroy;
