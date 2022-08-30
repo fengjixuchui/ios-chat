@@ -540,7 +540,7 @@
         [[WFCCIMService sharedWFCIMService] send:strongConv content:tip success:^(long long messageUid, long long timestamp) {
             [[WFCCIMService sharedWFCIMService] quitChatroom:strongConv.target success:nil error:nil];
         } error:^(int error_code) {
-            
+            [[WFCCIMService sharedWFCIMService] quitChatroom:strongConv.target success:nil error:nil];
         }];
     });
 }
@@ -1211,12 +1211,27 @@
 
 - (void)onRecallMessages:(NSNotification *)notification {
     long long messageUid = [notification.object longLongValue];
-    WFCCMessage *msg = [[WFCCIMService sharedWFCIMService] getMessageByUid:messageUid];
-    if (msg != nil) {
+    if (self.conversation.type != Chatroom_Type) {
+        WFCCMessage *msg = [[WFCCIMService sharedWFCIMService] getMessageByUid:messageUid];
+        if (msg != nil) {
+            for (int i = 0; i < self.modelList.count; i++) {
+                WFCUMessageModel *model = [self.modelList objectAtIndex:i];
+                if (model.message.messageUid == messageUid) {
+                    model.message = msg;
+                    [self.collectionView reloadItemsAtIndexPaths:@[[NSIndexPath indexPathForRow:i inSection:0]]];
+                    break;
+                }
+            }
+        }
+    } else {
         for (int i = 0; i < self.modelList.count; i++) {
             WFCUMessageModel *model = [self.modelList objectAtIndex:i];
             if (model.message.messageUid == messageUid) {
-                model.message = msg;
+                WFCCRecallMessageContent *recallContent = [[WFCCRecallMessageContent alloc] init];
+                recallContent.messageUid = messageUid;
+                recallContent.operatorId = model.message.fromUser;
+                recallContent.originalSender = model.message.fromUser;
+                model.message.content = recallContent;
                 [self.collectionView reloadItemsAtIndexPaths:@[[NSIndexPath indexPathForRow:i inSection:0]]];
                 break;
             }
@@ -2325,8 +2340,9 @@
 - (void)didLongPressMessagePortrait:(WFCUMessageCellBase *)cell withModel:(WFCUMessageModel *)model {
     if (self.conversation.type == Group_Type) {
         if (model.message.direction == MessageDirection_Receive) {
-            WFCCUserInfo *sender = [[WFCCIMService sharedWFCIMService] getUserInfo:model.message.fromUser refresh:NO];
-            [self.chatInputBar appendMention:model.message.fromUser name:sender.displayName];
+            WFCCUserInfo *sender = [[WFCCIMService sharedWFCIMService] getUserInfo:model.message.fromUser inGroup:self.conversation.target refresh:NO];
+            NSString *userName = sender.groupAlias.length ? sender.groupAlias : sender.displayName;
+            [self.chatInputBar appendMention:model.message.fromUser name:userName];
         }
     } else if(self.conversation.type == Channel_Type) {
         WFCCChannelInfo *channelInfo = [[WFCCIMService sharedWFCIMService] getChannelInfo:self.conversation.target refresh:NO];
