@@ -1832,7 +1832,11 @@
                     break;
                 }
             }
-            [self.collectionView scrollToItemAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0] atScrollPosition:UICollectionViewScrollPositionCenteredVertically animated:NO];
+            if ([self.collectionView.indexPathsForVisibleItems containsObject:[NSIndexPath indexPathForRow:row inSection:0]]) {
+                [self.collectionView reloadItemsAtIndexPaths:@[[NSIndexPath indexPathForRow:row inSection:0]]];
+            } else {
+                [self.collectionView scrollToItemAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0] atScrollPosition:UICollectionViewScrollPositionCenteredVertically animated:NO];
+            }
         });
     } else if (forceButtom) {
         [self scrollToBottom:YES];
@@ -2311,6 +2315,11 @@
                 }
             }
         }
+    } else if(self.conversation.type == Channel_Type && model.message.direction == MessageDirection_Receive) {
+        WFCUConversationSettingViewController *gvc = [[WFCUConversationSettingViewController alloc] init];
+        gvc.conversation = self.conversation;
+        [self.navigationController pushViewController:gvc animated:YES];
+        return;
     }
     
     WFCCUserInfo *userInfo = [[WFCCIMService sharedWFCIMService] getUserInfo:model.message.fromUser refresh:NO];
