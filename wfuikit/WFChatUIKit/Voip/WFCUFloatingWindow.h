@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <WFAVEngineKit/WFAVEngineKit.h>
 
+@class WFZConferenceInfo;
 /*!
  最小化显示的悬浮窗
  */
@@ -38,11 +39,11 @@
  开启悬浮窗
 
  @param callSession  通话实体
- @param focusUserId  焦点用户Id
+ @param focusUserProfile  焦点用户
  @param touchedBlock 悬浮窗点击的Block
  */
-+ (void)startCallFloatingWindow:(WFAVCallSession *)callSession focusUser:(NSString *)focusUserId
-              withTouchedBlock:(void (^)(WFAVCallSession *callSession))touchedBlock;
++ (void)startCallFloatingWindow:(WFAVCallSession *)callSession conferenceInfo:(WFZConferenceInfo *)conferenceInfo focusUser:(WFAVParticipantProfile *)focusUserProfile
+              withTouchedBlock:(void (^)(WFAVCallSession *callSession, WFZConferenceInfo *conferenceInfo))touchedBlock;
 
 /*!
  关闭当前悬浮窗

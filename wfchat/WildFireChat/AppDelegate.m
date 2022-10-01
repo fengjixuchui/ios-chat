@@ -7,13 +7,10 @@
 //
 
 
-//如果您不需要voip功能，请在ChatUIKit工程中关掉voip功能，然后这里定义WFCU_SUPPORT_VOIP为0
+//如果您不需要voip功能，请在ChatUIKit工程中关掉voip功能，然后修改WFChat-Prefix-Header.h中WFCU_SUPPORT_VOIP为0
 //ChatUIKit关闭voip的方式是，找到ChatUIKit工程下的Predefine.h头文件，定义WFCU_SUPPORT_VOIP为0，
-//然后找到脚本“xcodescript.sh”，删除掉“cp -af WFChatUIKit/AVEngine/*  ${DST_DIR}/”这句话。
-//在删除掉ChatUIKit工程的WebRTC和WFAVEngineKit的依赖。
-//删除掉应用工程中的WebRTC.framework和WFAVEngineKit.framework。
-#define WFCU_SUPPORT_VOIP 1
-//#define WFCU_SUPPORT_VOIP 0
+//再删除掉ChatUIKit工程的WebRTC和WFAVEngineKit的依赖。
+//删除掉应用工程中的WebRTC.framework和WFAVEngineKit.framework这两个库。
 
 #import "AppDelegate.h"
 #import <WFChatClient/WFCChatClient.h>
@@ -26,10 +23,7 @@
 #import "WFCBaseTabBarController.h"
 #import <WFChatUIKit/WFChatUIKit.h>
 #import <UserNotifications/UserNotifications.h>
-#import "CreateBarCodeViewController.h"
 #import "PCLoginConfirmViewController.h"
-#import "QQLBXScanViewController.h"
-#import "StyleDIY.h"
 #import "AppService.h"
 #import "UIColor+YH.h"
 #import "SharedConversation.h"
@@ -41,6 +35,7 @@
 #if USE_CALL_KIT
 #import "WFCCallKitManager.h"
 #endif
+#import "MBProgressHUD.h"
 
 
 
@@ -62,8 +57,10 @@
 
 @implementation AppDelegate
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+#if WFCU_SUPPORT_VOIP
 #if !USE_CALL_KIT
     [WFAVEngineKit notRegisterVoipPushService];
+#endif
 #endif
     [WFCCNetworkService sharedInstance].sendLogCommand = Send_Log_Command;
     [WFCCNetworkService startLog];
@@ -83,14 +80,17 @@
 
 #if WFCU_SUPPORT_VOIP
     //多人音视频通话时，是否在会话中现在正在通话让其他人主动加入。
-    //[WFCUConfigManager globalManager].enableMultiCallAutoJoin = YES;
+    [WFCUConfigManager globalManager].enableMultiCallAutoJoin = YES;
+    
+    //多人音视频通话时，是否在显示谁在说话
+    [WFCUConfigManager globalManager].displaySpeakingInMultiCall = YES;
     
     //音视频高级版不需要stun/turn服务，请注释掉下面这行。单人版和多人版需要turn服务，请自己部署然后修改配置文件。
     [[WFAVEngineKit sharedEngineKit] addIceServer:ICE_ADDRESS userName:ICE_USERNAME password:ICE_PASSWORD];
     
     [[WFAVEngineKit sharedEngineKit] setVideoProfile:kWFAVVideoProfile360P swapWidthHeight:YES];
     [WFAVEngineKit sharedEngineKit].delegate = self;
-    [WFAVEngineKit sharedEngineKit].screenSharingReplaceMode = YES;
+    [WFAVEngineKit sharedEngineKit].screenSharingReplaceMode = NO;
     
     // 设置音视频参与者数量。多人音视频默认视频4路，音频9路，如果改成更多可能会导致问题；音视频高级版默认视频9路，音频16路。
 //    [WFAVEngineKit sharedEngineKit].maxVideoCallCount = 4;
@@ -469,6 +469,9 @@
                   // Fallback on earlier versions
               }
           }
+      } else if(msg.conversation.type == Channel_Type) {
+          WFCCChannelInfo *channelInfo = [[WFCCIMService sharedWFCIMService] getChannelInfo:msg.conversation.target refresh:NO];
+          localNote.alertTitle = channelInfo.name;
       }
         
       localNote.applicationIconBadgeNumber = count;
@@ -634,8 +637,62 @@
         vc2.modalPresentationStyle = UIModalPresentationFullScreen;
         [navigator presentViewController:vc2 animated:YES completion:nil];
         return YES;
+    } else if ([str rangeOfString:@"wildfirechat://conference" options:NSCaseInsensitiveSearch].location == 0) {
+//        str = @"wildfirechat://conference/conferenceid?password=123456";
+        NSURL *URL = [NSURL URLWithString:str];
+        
+        NSString *conferenceId = [URL lastPathComponent];
+        NSMutableDictionary *params = [[NSMutableDictionary alloc] init];
+        NSURLComponents *urlComponents = [[NSURLComponents alloc] initWithString:str];
+        [urlComponents.queryItems enumerateObjectsUsingBlock:^(NSURLQueryItem * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+            [params setObject:obj.value forKey:obj.name];
+        }];
+        NSString *password = params[@"password"];
+        
+        
+        __weak typeof(self)ws = self;
+        __block MBProgressHUD *hud = [self startProgress:@"会议加载中" inView:navigator.view];
+        if ([WFAVEngineKit sharedEngineKit].supportConference) {
+            [[WFCUConfigManager globalManager].appServiceProvider queryConferenceInfo:conferenceId password:password success:^(WFZConferenceInfo * _Nonnull conferenceInfo) {
+                [ws stopProgress:hud inView:navigator.view finishText:nil];
+                WFZConferenceInfoViewController *vc = [[WFZConferenceInfoViewController alloc] init];
+                vc.conferenceId = conferenceInfo.conferenceId;
+                vc.password = conferenceInfo.password;
+                
+                UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
+                nav.modalPresentationStyle = UIModalPresentationFullScreen;
+                [navigator presentViewController:nav animated:YES completion:nil];
+            } error:^(int errorCode, NSString * _Nonnull message) {
+                if (errorCode == 16) {
+                    [ws stopProgress:hud inView:navigator.view finishText:@"会议已结束！"];
+                } else {
+                    [ws stopProgress:hud inView:navigator.view finishText:@"网络错误"];
+                }
+            }];
+        } else {
+            [ws stopProgress:hud inView:navigator.view finishText:@"不支持会议"];
+        }
+        return YES;
     }
     return NO;
+}
+- (MBProgressHUD *)startProgress:(NSString *)text inView:(UIView *)view {
+    MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:view animated:YES];
+    hud.label.text = text;
+    [hud showAnimated:YES];
+    return hud;
+}
+
+- (MBProgressHUD *)stopProgress:(MBProgressHUD *)hud inView:(UIView *)view finishText:(NSString *)text {
+    [hud hideAnimated:YES];
+    if(text) {
+        hud = [MBProgressHUD showHUDAddedTo:view animated:YES];
+        hud.mode = MBProgressHUDModeText;
+        hud.label.text = text;
+        hud.offset = CGPointMake(0.f, MBProgressMaxOffset);
+        [hud hideAnimated:YES afterDelay:1.f];
+    }
+    return hud;
 }
 
 #if WFCU_SUPPORT_VOIP

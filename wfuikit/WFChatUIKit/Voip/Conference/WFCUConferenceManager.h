@@ -7,6 +7,11 @@
 //
 
 #import <Foundation/Foundation.h>
+#if WFCU_SUPPORT_VOIP
+extern NSString *kMuteStateChanged;
+
+@class WFZConferenceInfo;
+@class WFCUConferenceHistory;
 
 @protocol WFCUConferenceManagerDelegate <NSObject>
 -(void)onChangeModeRequest:(BOOL)isAudience;
@@ -16,7 +21,18 @@
 + (WFCUConferenceManager *)sharedInstance;
 @property (nonatomic, weak) id<WFCUConferenceManagerDelegate> delegate;
 
+- (void)muteAudio:(BOOL)mute;
+- (void)muteVideo:(BOOL)mute;
+- (void)muteAudioVideo:(BOOL)mute;
+- (void)enableAudioDisableVideo;
+
+
 - (void)request:(NSString *)userId changeModel:(BOOL)isAudience inConference:(NSString *)conferenceId;
-- (void)kickoff:(NSString *)userId inConference:(NSString *)conferenceId;
-- (void)requestChangeModel:(BOOL)isAudience inConference:(NSString *)conferenceId;
+
+- (void)addHistory:(WFZConferenceInfo *)info duration:(int)duration;
+
+- (NSArray<WFCUConferenceHistory *> *)getConferenceHistoryList;
+
+- (NSString *)linkFromConferenceId:(NSString *)conferenceId password:(NSString *)password;
 @end
+#endif

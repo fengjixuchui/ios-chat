@@ -12,21 +12,17 @@
 
 @interface WFCUPortraitCollectionViewCell ()
 @property (nonatomic, strong)UIImageView *portraitView;
-@property (nonatomic, strong)UILabel *nameLabel;
 @property (nonatomic, strong)UIImageView *stateLabel;
-
-@property (nonatomic, strong)UIImageView *speakingView;
-
 @end
 
 @implementation WFCUPortraitCollectionViewCell
 
 - (void)setUserInfo:(WFCCUserInfo *)userInfo {
     _userInfo = userInfo;
+    self.layer.borderWidth = 1.f;
+    self.layer.borderColor = [UIColor clearColor].CGColor;
     [self.portraitView sd_setImageWithURL:[NSURL URLWithString:[userInfo.portrait stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]] placeholderImage:[WFCUImage imageNamed:@"PersonalChat"]];
-    self.nameLabel.text = userInfo.displayName;
     
-    _speakingView.hidden = YES;
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onVolumeUpdated:) name:@"wfavVolumeUpdated" object:nil];
     
@@ -36,16 +32,17 @@
     if([notification.object isEqual:self.userInfo.userId]) {
         NSInteger volume = [notification.userInfo[@"volume"] integerValue];
         if (volume > 1000) {
-            self.speakingView.hidden = NO;
-            [self bringSubviewToFront:self.speakingView];
+            self.layer.borderColor = [UIColor greenColor].CGColor;
         } else {
-            self.speakingView.hidden = YES;
+            self.layer.borderColor = [UIColor clearColor].CGColor;
         }
     }
 }
 
 -(void)setProfile:(WFAVParticipantProfile *)profile {
     _profile = profile;
+    self.layer.masksToBounds = YES;
+    self.layer.cornerRadius = 5;
     if (profile.state == kWFAVEngineStateConnected || profile.state == kWFAVEngineStateIdle) {
         [self.stateLabel stopAnimating];
         self.stateLabel.hidden = YES;
@@ -53,6 +50,23 @@
         [self.stateLabel startAnimating];
         self.stateLabel.hidden = NO;
     }
+    
+    BOOL isAudioMuted = YES;
+    if ([WFAVEngineKit sharedEngineKit].currentSession.isConference) {
+        if(!profile.audience) {
+            isAudioMuted = profile.audioMuted;
+        }
+    } else {
+        isAudioMuted = NO;
+    }
+    
+    if(isAudioMuted) {
+        self.layer.borderColor = [UIColor clearColor].CGColor;
+    }
+}
+
+- (void)addSubview:(UIView *)view {
+    [super addSubview:view];
 }
 
 - (UIImageView *)portraitView {
@@ -64,29 +78,6 @@
         [self addSubview:_portraitView];
     }
     return _portraitView;
-}
-
-- (UIImageView *)speakingView {
-    if (!_speakingView) {
-        _speakingView = [[UIImageView alloc] initWithFrame:CGRectMake(0, self.itemSize - 20, 20, 20)];
-
-        _speakingView.layer.masksToBounds = YES;
-        _speakingView.layer.cornerRadius = 2.f;
-        _speakingView.image = [WFCUImage imageNamed:@"speaking"];
-        [self addSubview:_speakingView];
-    }
-    return _speakingView;
-}
-
-- (UILabel *)nameLabel {
-    if (!_nameLabel) {
-        _nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, self.itemSize, self.itemSize, self.labelSize)];
-        _nameLabel.font = [UIFont systemFontOfSize:self.labelSize - 4];
-        _nameLabel.textColor = [UIColor whiteColor];
-        _nameLabel.textAlignment = NSTextAlignmentCenter;
-        [self addSubview:_nameLabel];
-    }
-    return _nameLabel;
 }
 
 - (UIImageView *)stateLabel {

@@ -13,18 +13,21 @@
 #import "WFCUConferenceManager.h"
 #import "WFCUConfigManager.h"
 #import "WFCUImage.h"
+#import "WFZConferenceInfo.h"
 
 @interface WFCUFloatingWindow () <WFAVCallSessionDelegate, WFCUConferenceManagerDelegate>
 
 @property(nonatomic, strong) NSTimer *activeTimer;
-@property(nonatomic, copy) void (^touchedBlock)(WFAVCallSession *callSession);
+@property(nonatomic, copy) void (^touchedBlock)(WFAVCallSession *callSession, WFZConferenceInfo *conferenceInfo);
 @property(nonatomic, strong) CTCallCenter *callCenter;
-@property(nonatomic, strong) NSString *focusUserId;
+@property(nonatomic, strong) WFAVParticipantProfile *focusUserProfile;
 
 @property(nonatomic, assign)CGFloat winWidth;
 @property(nonatomic, assign)CGFloat winHeight;
 
 @property(nonatomic, strong)NSTimer *broadcastOngoingTimer;
+
+@property(nonatomic, strong)WFZConferenceInfo *conferenceInfo;
 @end
 
 static WFCUFloatingWindow *staticWindow = nil;
@@ -34,14 +37,24 @@ static NSString *kFloatingWindowPosY = @"kFloatingWindowPosY";
 
 @implementation WFCUFloatingWindow
 
-+ (void)startCallFloatingWindow:(WFAVCallSession *)callSession focusUser:(NSString *)focusUserId
-              withTouchedBlock:(void (^)(WFAVCallSession *callSession))touchedBlock {
++ (void)startCallFloatingWindow:(WFAVCallSession *)callSession conferenceInfo:(WFZConferenceInfo *)conferenceInfo focusUser:(WFAVParticipantProfile *)focusUserProfile
+              withTouchedBlock:(void (^)(WFAVCallSession *callSession, WFZConferenceInfo *conferenceInfo))touchedBlock {
     staticWindow = [[WFCUFloatingWindow alloc] init];
     staticWindow.callSession = callSession;
     [staticWindow.callSession setDelegate:staticWindow];
     staticWindow.touchedBlock = touchedBlock;
-    staticWindow.focusUserId = focusUserId;
+    staticWindow.focusUserProfile = focusUserProfile;
+    staticWindow.conferenceInfo = conferenceInfo;
     [staticWindow initWindow];
+    if(callSession.isConference) {
+        [callSession.participants enumerateObjectsUsingBlock:^(WFAVParticipantProfile * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+            if([obj.userId isEqualToString:focusUserProfile.userId] && obj.screeSharing == focusUserProfile.screeSharing) {
+                [callSession setParticipant:obj.userId screenSharing:obj.screeSharing videoType:WFAVVideoType_SmallStream];
+            } else {
+                [callSession setParticipant:obj.userId screenSharing:obj.screeSharing videoType:WFAVVideoType_None];
+            }
+        }];
+    }
 }
 
 + (void)stopCallFloatingWindow {
@@ -62,6 +75,7 @@ static NSString *kFloatingWindowPosY = @"kFloatingWindowPosY";
                                              selector:@selector(onDeviceOrientationDidChange:)
                                                  name:UIDeviceOrientationDidChangeNotification
                                                object:nil];
+    [self addProximityMonitoringObserver];
     [WFCUConferenceManager sharedInstance].delegate = self;
     
     if(!self.callSession.isConference) {
@@ -255,11 +269,21 @@ static NSString *kFloatingWindowPosY = @"kFloatingWindowPosY";
         } else if (self.callSession.state == kWFAVEngineStateConnected) {
             self.videoView.hidden = NO;
             [self.floatingButton setTitle:@"" forState:UIControlStateNormal];
-            if ([self.focusUserId isEqualToString:[WFCCNetworkService sharedInstance].userId]) {
+            NSString *focusUserId;
+            BOOL screenSharing = NO;
+            if([self.focusUserProfile isKindOfClass:[NSString class]]) {
+                focusUserId = (NSString *)self.focusUserProfile;
+            } else {
+                focusUserId = self.focusUserProfile.userId;
+                screenSharing = self.focusUserProfile.screeSharing;
+            }
+            
+            if ([focusUserId isEqualToString:[WFCCNetworkService sharedInstance].userId]) {
                 [self.callSession setupLocalVideoView:self.videoView scalingType:kWFAVVideoScalingTypeAspectFit];
             } else {
-                [self.callSession setupRemoteVideoView:self.videoView scalingType:kWFAVVideoScalingTypeAspectFit forUser:self.focusUserId screenSharing:NO];
+                [self.callSession setupRemoteVideoView:self.videoView scalingType:kWFAVVideoScalingTypeAspectFit forUser:focusUserId screenSharing:screenSharing];
             }
+            
             [self updateVideoView];
         } else if (self.callSession.state == kWFAVEngineStateIdle) {
             UILabel *videoStopTips =
@@ -293,11 +317,20 @@ static NSString *kFloatingWindowPosY = @"kFloatingWindowPosY";
 }
 - (void)updateVideoView {
     __block BOOL isMuted = NO;
-    if ([self.focusUserId isEqualToString:[WFCCNetworkService sharedInstance].userId]) {
+    NSString *focusUserId;
+    BOOL screenSharing = NO;
+    if([self.focusUserProfile isKindOfClass:[NSString class]]) {
+        focusUserId = (NSString *)self.focusUserProfile;
+    } else {
+        focusUserId = self.focusUserProfile.userId;
+        screenSharing = self.focusUserProfile.screeSharing;
+    }
+    
+    if ([focusUserId isEqualToString:[WFCCNetworkService sharedInstance].userId]) {
         isMuted = [WFAVEngineKit sharedEngineKit].currentSession.isVideoMuted;
     } else {
         [[[WFAVEngineKit sharedEngineKit].currentSession participants] enumerateObjectsUsingBlock:^(WFAVParticipantProfile * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-            if([obj isEqual:self.focusUserId]) {
+            if([obj.userId isEqual:focusUserId] && obj.screeSharing == screenSharing) {
                 isMuted = obj.videoMuted;
                 *stop = YES;
             }
@@ -443,7 +476,7 @@ static NSString *kFloatingWindowPosY = @"kFloatingWindowPosY";
     
     [self hideCallFloatingWindow];
     if (self.touchedBlock) {
-        self.touchedBlock(self.callSession);
+        self.touchedBlock(self.callSession, self.conferenceInfo);
     }
     [self clearCallFloatingWindow];
 }
@@ -496,6 +529,7 @@ static NSString *kFloatingWindowPosY = @"kFloatingWindowPosY";
         case kWFAVEngineStateIdle:
             [self updateWindow];
             [self performSelector:@selector(clearCallFloatingWindow) withObject:nil afterDelay:2];
+            [self removeProximityMonitoringObserver];
             break;
             
         case kWFAVEngineStateConnected:
@@ -516,7 +550,9 @@ static NSString *kFloatingWindowPosY = @"kFloatingWindowPosY";
 }
 
 - (void)didCallEndWithReason:(WFAVCallEndReason)reason {
-    
+    if(self.callSession.isConference && self.conferenceInfo) {
+        [[WFCUConferenceManager sharedInstance] addHistory:self.conferenceInfo duration:(int)([WFAVEngineKit sharedEngineKit].currentSession.endTime - [WFAVEngineKit sharedEngineKit].currentSession.startTime)];
+    }
 }
 
 - (void)didParticipantJoined:(NSString *)userId screenSharing:(BOOL)screenSharing {
@@ -571,6 +607,22 @@ static NSString *kFloatingWindowPosY = @"kFloatingWindowPosY";
     if(![WFAVEngineKit sharedEngineKit].currentSession.isAudioOnly) {
         [self updateVideoView];
     }
+}
+- (void)addProximityMonitoringObserver {
+    [UIDevice currentDevice].proximityMonitoringEnabled = YES;
+
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(proximityStatueChanged:)
+                                                 name:UIDeviceProximityStateDidChangeNotification
+                                               object:nil];
+}
+
+- (void)removeProximityMonitoringObserver {
+    [UIDevice currentDevice].proximityMonitoringEnabled = NO;
+
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                    name:UIDeviceProximityStateDidChangeNotification
+                                                  object:nil];
 }
 
 - (void)proximityStatueChanged:(NSNotificationCenter *)notification {

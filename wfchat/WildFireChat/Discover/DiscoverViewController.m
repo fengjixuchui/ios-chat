@@ -151,7 +151,7 @@
 //    }
     
     if ([des isEqualToString:@"Conference"]) {
-        WFCUCreateConferenceViewController *vc = [[WFCUCreateConferenceViewController alloc] init];
+        WFZHomeViewController *vc = [[WFZHomeViewController alloc] init];
         vc.hidesBottomBarWhenPushed = YES;
         [self.navigationController pushViewController:vc animated:YES];
     }

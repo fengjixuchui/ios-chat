@@ -82,6 +82,9 @@
 #import "WFCUArticlesCell.h"
 #import "WFCUImage.h"
 
+#import "WFZConferenceInfoViewController.h"
+#import "WFZConferenceInfo.h"
+
 @interface WFCUMessageListViewController () <UITextFieldDelegate, UICollectionViewDelegateFlowLayout, UICollectionViewDataSource, UICollectionViewDelegate, UINavigationControllerDelegate, WFCUMessageCellDelegate, AVAudioPlayerDelegate, WFCUChatInputBarDelegate, SDPhotoBrowserDelegate, UIGestureRecognizerDelegate, UITableViewDelegate, UITableViewDataSource, WFCUMultiCallOngoingExpendedCellDelegate>
 
 @property (nonatomic, strong)NSMutableArray<WFCUMessageModel *> *modelList;
@@ -267,26 +270,37 @@
     self.orignalDraft = [[WFCCIMService sharedWFCIMService] getConversationInfo:self.conversation].draft;
     
     if (self.conversation.type == Chatroom_Type) {
-        __block MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:ws.view animated:YES];
-        hud.label.text = WFCString(@"JoinChatroom");
-        [hud showAnimated:YES];
-        
-        [[WFCCIMService sharedWFCIMService] joinChatroom:ws.conversation.target success:^{
-            NSLog(@"join chatroom successs");
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [ws sendChatroomWelcomeMessage];
-            });
-            [hud hideAnimated:YES];
-        } error:^(int error_code) {
-            NSLog(@"join chatroom error");
-            hud.mode = MBProgressHUDModeText;
-            hud.label.text = WFCString(@"JoinChatroomFailure");
-            //            hud.offset = CGPointMake(0.f, MBProgressMaxOffset);
-            [hud hideAnimated:YES afterDelay:1.f];
-            hud.completionBlock = ^{
-                [ws.navigationController popViewControllerAnimated:YES];
-            };
-        }];
+        NSString *joinedChatroomId = [[WFCCIMService sharedWFCIMService] getJoinedChatroomId];
+
+        if(![ws.conversation.target isEqualToString:joinedChatroomId]) {
+            __block MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:ws.view animated:YES];
+            hud.label.text = WFCString(@"JoinChatroom");
+            [hud showAnimated:YES];
+            
+            [[WFCCIMService sharedWFCIMService] joinChatroom:ws.conversation.target success:^{
+                NSLog(@"join chatroom successs");
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    [ws sendChatroomWelcomeMessage];
+                });
+                [hud hideAnimated:YES];
+            } error:^(int error_code) {
+                NSLog(@"join chatroom error");
+                hud.mode = MBProgressHUDModeText;
+                hud.label.text = WFCString(@"JoinChatroomFailure");
+                //            hud.offset = CGPointMake(0.f, MBProgressMaxOffset);
+                [hud hideAnimated:YES afterDelay:1.f];
+                hud.completionBlock = ^{
+                    [ws.navigationController popViewControllerAnimated:YES];
+                };
+            }];
+        } else {
+            [[WFCCIMService sharedWFCIMService] joinChatroom:ws.conversation.target success:^{
+               //需要拉取历史消息
+                [ws loadMoreMessage:YES completion:nil];
+            } error:^(int error_code) {
+                
+            }];
+        }
     }
     if(self.conversation.type == Channel_Type) {
         WFCCEnterChannelChatMessageContent *enterContent = [[WFCCEnterChannelChatMessageContent alloc] init];
@@ -377,7 +391,11 @@
         } else if(self.conversation.type == SecretChat_Type) {
             self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[WFCUImage imageNamed:@"nav_chat_single"] style:UIBarButtonItemStyleDone target:self action:@selector(onRightBarBtn:)];
         }
-        self.navigationItem.leftBarButtonItem = nil;
+        if(self.presented) {
+            self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"关闭" style:UIBarButtonItemStyleDone target:self action:@selector(onCloseBtn:)];
+        } else {
+            self.navigationItem.leftBarButtonItem = nil;
+        }
     }
     self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] init];
 }
@@ -524,25 +542,37 @@
     }
 }
 - (void)sendChatroomWelcomeMessage {
-    WFCCTipNotificationContent *tip = [[WFCCTipNotificationContent alloc] init];
-    WFCCUserInfo *userInfo = [[WFCCIMService sharedWFCIMService] getUserInfo:[WFCCNetworkService sharedInstance].userId refresh:NO];
-    tip.tip = [NSString stringWithFormat:WFCString(@"WelcomeJoinChatroomHint"), userInfo.displayName];
-    [self sendMessage:tip];
+    if(!self.silentJoinChatroom) {
+        WFCCTipNotificationContent *tip = [[WFCCTipNotificationContent alloc] init];
+        WFCCUserInfo *userInfo = [[WFCCIMService sharedWFCIMService] getUserInfo:[WFCCNetworkService sharedInstance].userId refresh:NO];
+        tip.tip = [NSString stringWithFormat:WFCString(@"WelcomeJoinChatroomHint"), userInfo.displayName];
+        [self sendMessage:tip];
+    }
 }
 
 - (void)sendChatroomLeaveMessage {
     __block WFCCConversation *strongConv = self.conversation;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        WFCCTipNotificationContent *tip = [[WFCCTipNotificationContent alloc] init];
-        WFCCUserInfo *userInfo = [[WFCCIMService sharedWFCIMService] getUserInfo:[WFCCNetworkService sharedInstance].userId refresh:NO];
-        tip.tip = [NSString stringWithFormat:WFCString(@"LeaveChatroomHint"), userInfo.displayName];
-        
-        [[WFCCIMService sharedWFCIMService] send:strongConv content:tip success:^(long long messageUid, long long timestamp) {
+    if(!self.silentJoinChatroom) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            WFCCTipNotificationContent *tip = [[WFCCTipNotificationContent alloc] init];
+            WFCCUserInfo *userInfo = [[WFCCIMService sharedWFCIMService] getUserInfo:[WFCCNetworkService sharedInstance].userId refresh:NO];
+            tip.tip = [NSString stringWithFormat:WFCString(@"LeaveChatroomHint"), userInfo.displayName];
+            
+            [[WFCCIMService sharedWFCIMService] send:strongConv content:tip success:^(long long messageUid, long long timestamp) {
+                [[WFCCIMService sharedWFCIMService] quitChatroom:strongConv.target success:nil error:nil];
+            } error:^(int error_code) {
+                [[WFCCIMService sharedWFCIMService] quitChatroom:strongConv.target success:nil error:nil];
+            }];
+        });
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
             [[WFCCIMService sharedWFCIMService] quitChatroom:strongConv.target success:nil error:nil];
-        } error:^(int error_code) {
-            [[WFCCIMService sharedWFCIMService] quitChatroom:strongConv.target success:nil error:nil];
-        }];
-    });
+        });
+    }
+    
+}
+- (void)onCloseBtn:(id)sender {
+    [self.navigationController dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)onLeftBtnPressed:(id)sender {
@@ -558,7 +588,7 @@
 }
 
 - (void)leftMessageVC {
-    if (self.conversation.type == Chatroom_Type) {
+    if (self.conversation.type == Chatroom_Type && !self.keepInChatroom) {
         [self sendChatroomLeaveMessage];
     }
     if(self.conversation.type == Channel_Type) {
@@ -972,8 +1002,8 @@
         insets = self.view.safeAreaInsets;
     }
     CGRect frame = self.view.bounds;
-    frame.origin.y += kStatusBarAndNavigationBarHeight;
-    frame.size.height -= (kTabbarSafeBottomMargin + kStatusBarAndNavigationBarHeight);
+    frame.origin.y += [WFCUUtilities wf_navigationFullHeight];
+    frame.size.height -= ([WFCUUtilities wf_safeDistanceBottom] + [WFCUUtilities wf_navigationFullHeight]);
     self.backgroundView = [[UIView alloc] initWithFrame:frame];
     [self.view addSubview:self.backgroundView];
     
@@ -981,7 +1011,7 @@
     
     [self.backgroundView addSubview:self.collectionView];
     
-    self.backgroundView.backgroundColor = [UIColor whiteColor];
+    self.backgroundView.backgroundColor = [WFCUConfigManager globalManager].backgroudColor;
     self.collectionView.backgroundColor = [WFCUConfigManager globalManager].backgroudColor;
     self.collectionView.showsHorizontalScrollIndicator = NO;
     self.collectionView.showsVerticalScrollIndicator = NO;
@@ -1169,7 +1199,7 @@
     }
     
     if(self.ongoingCallDict.count) {
-        self.ongoingCallTableView.frame = CGRectMake(0, kStatusBarAndNavigationBarHeight, self.view.bounds.size.width, MIN(200, self.ongoingCallDict.count * 28 + 28));
+        self.ongoingCallTableView.frame = CGRectMake(0, [WFCUUtilities wf_navigationFullHeight], self.view.bounds.size.width, MIN(200, self.ongoingCallDict.count * 28 + 28));
         [self.ongoingCallTableView reloadData];
         if(!self.checkOngoingCallTimer) {
             if (@available(iOS 10.0, *)) {
@@ -1182,7 +1212,7 @@
             }
         }
     } else {
-        self.ongoingCallTableView.frame = CGRectMake(0, kStatusBarAndNavigationBarHeight, self.view.bounds.size.width, 0);
+        self.ongoingCallTableView.frame = CGRectMake(0, [WFCUUtilities wf_navigationFullHeight], self.view.bounds.size.width, 0);
         if(self.checkOngoingCallTimer) {
             [self.checkOngoingCallTimer invalidate];
             self.checkOngoingCallTimer = nil;
@@ -1197,7 +1227,7 @@
     
     NSMutableArray<WFCCMessage *> *ongoingCalls = [[NSMutableArray alloc] init];
     for (WFCCMessage *msg in messages) {
-        if([msg.content isKindOfClass:WFCCMultiCallOngoingMessageContent.class]) {
+        if([msg.content isKindOfClass:WFCCMultiCallOngoingMessageContent.class] && [msg.conversation isEqual:self.conversation]) {
             [ongoingCalls addObject:msg];
         }
     }
@@ -2215,10 +2245,28 @@
         }
     } else if([model.message.content isKindOfClass:[WFCCConferenceInviteMessageContent class]]) {
 #if WFCU_SUPPORT_VOIP
+        __weak typeof(self)ws = self;
+        __block MBProgressHUD *hud = [self startProgress:@"会议加载中"];
         if ([WFAVEngineKit sharedEngineKit].supportConference) {
-            WFCCConferenceInviteMessageContent *invite = (WFCCConferenceInviteMessageContent *)model.message.content;   
-            WFCUConferenceViewController *vc = [[WFCUConferenceViewController alloc] initWithInvite:invite];
-            [[WFAVEngineKit sharedEngineKit] presentViewController:vc];
+            WFCCConferenceInviteMessageContent *invite = (WFCCConferenceInviteMessageContent *)model.message.content;
+            [[WFCUConfigManager globalManager].appServiceProvider queryConferenceInfo:invite.callId password:invite.password success:^(WFZConferenceInfo * _Nonnull conferenceInfo) {
+                [ws stopProgress:hud finishText:nil];
+                WFZConferenceInfoViewController *vc = [[WFZConferenceInfoViewController alloc] init];
+                vc.conferenceId = conferenceInfo.conferenceId;
+                vc.password = conferenceInfo.password;
+                
+                UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
+                nav.modalPresentationStyle = UIModalPresentationFullScreen;
+                [self.navigationController presentViewController:nav animated:YES completion:nil];
+            } error:^(int errorCode, NSString * _Nonnull message) {
+                if (errorCode == 16) {
+                    [ws stopProgress:hud finishText:@"会议已结束！"];
+                } else {
+                    [ws stopProgress:hud finishText:@"网络错误"];
+                }
+            }];
+        } else {
+            [ws stopProgress:hud finishText:@"不支持会议"];
         }
 #endif
     } else if([model.message.content isKindOfClass:[WFCCCardMessageContent class]]) {
@@ -2266,6 +2314,25 @@
     }
 }
 
+- (MBProgressHUD *)startProgress:(NSString *)text {
+    MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+    hud.label.text = text;
+    [hud showAnimated:YES];
+    return hud;
+}
+
+- (MBProgressHUD *)stopProgress:(MBProgressHUD *)hud finishText:(NSString *)text {
+    [hud hideAnimated:YES];
+    if(text) {
+        hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+        hud.mode = MBProgressHUDModeText;
+        hud.label.text = text;
+        [hud hideAnimated:YES afterDelay:1.f];
+    }
+    return hud;
+}
+
+
 - (void)didDoubleTapMessageCell:(WFCUMessageCellBase *)cell withModel:(WFCUMessageModel *)model {
     if ([model.message.content isKindOfClass:[WFCCTextMessageContent class]]) {
         WFCCTextMessageContent *txtMsgContent = (WFCCTextMessageContent *)model.message.content;
@@ -2274,7 +2341,7 @@
         UIView *textContainer = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
         textContainer.backgroundColor = self.view.backgroundColor;
         
-        UITextView *textView = [[UITextView alloc] initWithFrame:CGRectMake(0, kStatusBarAndNavigationBarHeight, [UIScreen mainScreen].bounds.size.width, [UIScreen mainScreen].bounds.size.height - kStatusBarAndNavigationBarHeight - kTabbarSafeBottomMargin)];
+        UITextView *textView = [[UITextView alloc] initWithFrame:CGRectMake(0, [WFCUUtilities wf_navigationFullHeight], [UIScreen mainScreen].bounds.size.width, [UIScreen mainScreen].bounds.size.height - [WFCUUtilities wf_navigationFullHeight] - [WFCUUtilities wf_safeDistanceBottom])];
          textView.text = txtMsgContent.text;
         textView.textAlignment = NSTextAlignmentCenter;
         textView.font = [UIFont systemFontOfSize:28];
@@ -2444,7 +2511,7 @@
                 UIView *textContainer = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
                 textContainer.backgroundColor = self.view.backgroundColor;
                 
-                UITextView *textView = [[UITextView alloc] initWithFrame:CGRectMake(0, kStatusBarAndNavigationBarHeight, [UIScreen mainScreen].bounds.size.width, [UIScreen mainScreen].bounds.size.height - kStatusBarAndNavigationBarHeight - kTabbarSafeBottomMargin)];
+                UITextView *textView = [[UITextView alloc] initWithFrame:CGRectMake(0, [WFCUUtilities wf_navigationFullHeight], [UIScreen mainScreen].bounds.size.width, [UIScreen mainScreen].bounds.size.height - [WFCUUtilities wf_navigationFullHeight] - [WFCUUtilities wf_safeDistanceBottom])];
                  textView.text = txtContent.text;
                 textView.textAlignment = NSTextAlignmentCenter;
                 textView.font = [UIFont systemFontOfSize:28];
@@ -3250,6 +3317,7 @@
     return 28;
 }
 
+#if WFCU_SUPPORT_VOIP
 -(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     if (self.focusedOngoingCellIndex == indexPath.row) {
         self.focusedOngoingCellIndex = -1;
@@ -3264,6 +3332,7 @@
     }
     [self.ongoingCallTableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
 }
+#endif
 
 #pragma mark - WFCUMultiCallOngoingExpendedCellDelegate
 -(void)didJoinButtonPressed {
