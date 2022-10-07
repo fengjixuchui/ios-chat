@@ -3,7 +3,7 @@
 //  WFChatUIKit
 //
 //  Created by dali on 2020/11/12.
-//  Copyright © 2020 Tom Lee. All rights reserved.
+//  Copyright © 2020 Wildfirechat. All rights reserved.
 //
 
 #import "WFCUConversationFilesViewController.h"
@@ -61,7 +61,18 @@
         } else {
             cell.textLabel.text = @"群组";
         }
-        [cell.imageView sd_setImageWithURL:[NSURL URLWithString:group.portrait] placeholderImage: [WFCUImage imageNamed:@"group_default_portrait"]];
+
+        if (group.portrait.length) {
+            [cell.imageView sd_setImageWithURL:[NSURL URLWithString:[group.portrait stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]] placeholderImage:[WFCUImage imageNamed:@"group_default_portrait"]];
+        } else {
+            NSString *path = [WFCCUtilities getGroupGridPortrait:group.target width:80 generateIfNotExist:YES defaultUserPortrait:^UIImage *(NSString *userId) {
+                return [WFCUImage imageNamed:@"PersonalChat"];
+            }];
+            
+            if (path) {
+                [cell.imageView sd_setImageWithURL:[NSURL fileURLWithPath:path] placeholderImage:[WFCUImage imageNamed:@"group_default_portrait"]];
+            }
+        }
     } else if (conv.conversation.type == SecretChat_Type) {
         NSString *userId = [[WFCCIMService sharedWFCIMService] getSecretChatInfo:conv.conversation.target].userId;
         WFCCUserInfo *user = [[WFCCIMService sharedWFCIMService] getUserInfo:userId refresh:NO];

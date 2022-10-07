@@ -47,14 +47,11 @@
         self.stateLabel.hidden = NO;
     } else {
         [self.stateLabel stop];
-        if (profile.videoMuted || profile.audience) {
-            self.stateLabel.hidden = NO;
-            self.stateLabel.image = [WFCUImage imageNamed:@"disable_video"];
-        } else {
-            self.stateLabel.hidden = YES;
-        }
+        self.stateLabel.hidden = YES;
     }
 
+    self.layer.borderColor = [UIColor clearColor].CGColor;
+    self.portraitView.layer.borderColor = [UIColor clearColor].CGColor;
     self.conferenceLabelView.name = userInfo.displayName;
     
     BOOL isVideoMuted = YES;
@@ -79,6 +76,13 @@
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onVolumeUpdated:) name:@"wfavVolumeUpdated" object:nil];
     
+    
+    CGRect frame = self.conferenceLabelView.frame;
+    if(isVideoMuted) {
+        self.conferenceLabelView.frame = CGRectMake(self.bounds.size.width/2 - frame.size.width/2, self.bounds.size.height/2 + 30 + 4, frame.size.width, frame.size.height);
+    } else {
+        self.conferenceLabelView.frame = CGRectMake(4, self.bounds.size.height - frame.size.height - 4, frame.size.width, frame.size.height);
+    }
 }
 
 - (void)addSubview:(UIView *)view {
@@ -89,11 +93,22 @@
 - (void)onVolumeUpdated:(NSNotification *)notification {
     if([notification.object isEqual:self.userId]) {
         NSInteger volume = [notification.userInfo[@"volume"] integerValue];
-        if (volume > 1000) {
-            self.layer.borderColor = [UIColor greenColor].CGColor;
-        } else {
+        if(self.conferenceLabelView.isMuteVideo) {
+            if (volume > 1000) {
+                self.portraitView.layer.borderColor = [UIColor greenColor].CGColor;
+            } else {
+                self.portraitView.layer.borderColor = [UIColor clearColor].CGColor;
+            }
             self.layer.borderColor = [UIColor clearColor].CGColor;
+        } else {
+            if (volume > 1000) {
+                self.layer.borderColor = [UIColor greenColor].CGColor;
+            } else {
+                self.layer.borderColor = [UIColor clearColor].CGColor;
+            }
+            self.portraitView.layer.borderColor = [UIColor clearColor].CGColor;
         }
+        
         self.conferenceLabelView.volume = volume;
     }
 }
@@ -102,7 +117,7 @@
     if(!_conferenceLabelView) {
         CGSize size = [WFCUConferenceLabelView sizeOffView];
         _conferenceLabelView = [[WFCUConferenceLabelView alloc] initWithFrame:CGRectMake(4, self.bounds.size.height - size.height - 4, size.width, size.height)];
-        [self addSubview:_conferenceLabelView];
+        [self.contentView addSubview:_conferenceLabelView];
     }
     return _conferenceLabelView;
 }
@@ -110,10 +125,12 @@
 - (UIImageView *)portraitView {
     if (!_portraitView) {
         _portraitView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 60, 60)];
-        _portraitView.center = self.center;
+        _portraitView.center = self.contentView.center;
         _portraitView.layer.masksToBounds = YES;
         _portraitView.layer.cornerRadius = 30;
-        [self addSubview:_portraitView];
+        _portraitView.layer.borderWidth = 1;
+        _portraitView.layer.borderColor = [UIColor clearColor].CGColor;
+        [self.contentView addSubview:_portraitView];
     }
     return _portraitView;
 }
@@ -121,13 +138,14 @@
 - (WFCUWaitingAnimationView *)stateLabel {
     if (!_stateLabel) {
         _stateLabel = [[WFCUWaitingAnimationView alloc] initWithFrame:CGRectMake(0, 0, 60, 60)];
-        _stateLabel.center = self.center;
         _stateLabel.animationImages = @[[WFCUImage imageNamed:@"connect_ani1"],[WFCUImage imageNamed:@"connect_ani2"],[WFCUImage imageNamed:@"connect_ani3"]];
         _stateLabel.animationDuration = 1;
         _stateLabel.animationRepeatCount = 200;
         _stateLabel.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.7];
         _stateLabel.hidden = YES;
-        [self addSubview:_stateLabel];
+        _stateLabel.layer.masksToBounds = YES;
+        _stateLabel.layer.cornerRadius = 30;
+        [self.portraitView addSubview:_stateLabel];
     }
     return _stateLabel;
 }

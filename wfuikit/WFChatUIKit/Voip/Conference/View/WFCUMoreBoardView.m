@@ -3,7 +3,7 @@
 //  WFChatUIKit
 //
 //  Created by Rain on 2022/9/28.
-//  Copyright © 2022 Tom Lee. All rights reserved.
+//  Copyright © 2022 Wildfirechat. All rights reserved.
 //
 
 #import "WFCUMoreBoardView.h"
@@ -24,19 +24,20 @@
 @interface WFCUMoreBoardView ()
 @property(nonatomic, strong)NSArray<MoreItem *> *items;
 @property(nonatomic, strong)void(^cancelBlock)(WFCUMoreBoardView *boardView);
+@property(nonatomic, assign)CGFloat parentWidth;
 @end
 
-#define ITEM_COUNT_OF_LINE 4
 
 #define ITEM_SIZE 48
 #define CANCEL_BTN_HEIGHT 36
 
 @implementation WFCUMoreBoardView
-- (instancetype)initWithItems:(NSArray<MoreItem *> *)items cancel:(void(^)(WFCUMoreBoardView *boardView))cancelBlock {
+- (instancetype)initWithWidth:(CGFloat)width items:(NSArray<MoreItem *> *)items cancel:(void(^)(WFCUMoreBoardView *boardView))cancelBlock {
     self = [super initWithFrame:CGRectZero];
     if(self) {
         self.items = items;
         self.cancelBlock = cancelBlock;
+        self.parentWidth = width;
         [self setupSubViews];
     }
     return self;
@@ -48,7 +49,8 @@
         [self addButtonAtIndex:i];
     }
     
-    CGFloat boardWidth = [UIScreen mainScreen].bounds.size.width - 16 - 16;
+    CGFloat boardWidth = self.parentWidth - 16 - 16;
+    int ITEM_COUNT_OF_LINE = (int)boardWidth/ITEM_SIZE/(1.5);
     CGFloat padding = boardWidth/ITEM_COUNT_OF_LINE - ITEM_SIZE;
     
     int line = (int)self.items.count / ITEM_COUNT_OF_LINE;
@@ -69,7 +71,8 @@
 }
 
 - (void)addButtonAtIndex:(int)i {
-    CGFloat boardWidth = [UIScreen mainScreen].bounds.size.width - 16 - 16;
+    CGFloat boardWidth = self.parentWidth - 16 - 16;
+    int ITEM_COUNT_OF_LINE = (int)boardWidth/ITEM_SIZE/(1.5);
     CGFloat padding = boardWidth/ITEM_COUNT_OF_LINE - ITEM_SIZE;
     
     int line = i / ITEM_COUNT_OF_LINE;
@@ -105,7 +108,12 @@
         [[self.items mutableCopy] replaceObjectAtIndex:btn.tag withObject:moreItem];
         [btn removeFromSuperview];
         [self addButtonAtIndex:(int)btn.tag];
+    } else {
+        [self dismiss];
     }
-    [self removeFromSuperview];
+}
+
+- (void)dismiss {
+    self.cancelBlock(self);
 }
 @end
