@@ -207,7 +207,7 @@
     }
     
     if(audioOnly) {
-        if((!self.currentSession.audience && !self.currentSession.videoMuted) || [self.currentSession isInAppScreenSharing]) {
+        if((!self.currentSession.audience && !self.currentSession.videoMuted) || [self.currentSession isBroadcasting]) {
             audioOnly = NO;
         }
     }
@@ -290,6 +290,7 @@
     [self.participantCollectionView registerClass:[WFCUConferenceParticipantCollectionViewCell class] forCellWithReuseIdentifier:@"main"];
     [self.participantCollectionView registerClass:[WFCUConferenceParticipantCollectionViewCell class] forCellWithReuseIdentifier:@"sub"];
     [self.participantCollectionView registerClass:[WFCUConferenceAudioCollectionViewCell class] forCellWithReuseIdentifier:@"audio_cell"];
+    [self.participantCollectionView registerClass:[UICollectionViewCell class] forCellWithReuseIdentifier:@"broadcasting"];
     self.participantCollectionView.backgroundColor = [UIColor clearColor];
     if (self.currentSession.audioOnly) {
         self.participantCollectionView.hidden = YES;
@@ -384,12 +385,14 @@
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onReceiveMessages:) name:kReceiveMessages object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onLocalMuteStateChanged:) name:kMuteStateChanged object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onMessageSent:) name:kSendingMessageStatusUpdated object:nil];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onBroadcastingStatusUpdated:) name:@"kBroadcastingStatusUpdated" object:nil];
 }
 
 - (UIButton *)chatButton {
     if(!_chatButton) {
         _chatButton = [[UIButton alloc] initWithFrame:CGRectZero];
-        [_chatButton setTitle:@"说点什么..." forState:UIControlStateNormal];
+        [_chatButton setTitle:WFCString(@"TalkAboutSomething") forState:UIControlStateNormal];
         [_chatButton setTitleColor:[UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:0.5] forState:UIControlStateNormal];
         _chatButton.backgroundColor = [UIColor colorWithRed:0.5 green:0.5 blue:0.5 alpha:0.5];
         _chatButton.layer.masksToBounds = YES;
@@ -783,12 +786,11 @@
 }
 
 - (void)updateConnectedTimeLabel {
-    long sec = [[NSDate date] timeIntervalSince1970] - self.currentSession.connectedTime / 1000;
-    if(sec <= 0) {
-        self.connectTimeLabel.hidden = YES;
-    } else {
-        self.connectTimeLabel.hidden = NO;
+    long sec = [[NSDate date] timeIntervalSince1970] - (self.currentSession.connectedTime+500) / 1000;
+    if(sec <0) {
+        sec = 0;
     }
+    
     if (sec < 60 * 60) {
         self.connectTimeLabel.text = [NSString stringWithFormat:@"%02ld:%02ld", sec / 60, sec % 60];
     } else {
@@ -801,7 +803,7 @@
     
     [self startHidePanelTimer];
     NSArray<MoreItem *> *boardItems;
-    MoreItem *inviteItem = [[MoreItem alloc] initWithTitle:@"邀请" image:[WFCUImage imageNamed:@"conference_invite"] callback:^MoreItem * _Nonnull{
+    MoreItem *inviteItem = [[MoreItem alloc] initWithTitle:WFCString(@"Invite") image:[WFCUImage imageNamed:@"conference_invite"] callback:^MoreItem * _Nonnull{
         WFCUConferenceInviteViewController *pvc = [[WFCUConferenceInviteViewController alloc] init];
         
         WFCCConferenceInviteMessageContent *invite = [[WFCCConferenceInviteMessageContent alloc] init];
@@ -822,7 +824,7 @@
         return nil;
     }];
     
-    MoreItem *chatItem = [[MoreItem alloc] initWithTitle:@"聊天" image:[WFCUImage imageNamed:@"conference_chat"] callback:^MoreItem * _Nonnull{
+    MoreItem *chatItem = [[MoreItem alloc] initWithTitle:WFCString(@"Chat") image:[WFCUImage imageNamed:@"conference_chat"] callback:^MoreItem * _Nonnull{
         WFCUMessageListViewController *mvc = [[WFCUMessageListViewController alloc] init];
         mvc.conversation = [WFCCConversation conversationWithType:Chatroom_Type target:self.currentSession.callId line:0];
         mvc.keepInChatroom = YES;
@@ -836,13 +838,13 @@
         return nil;
     }];
     
-    MoreItem *minimizeItem = [[MoreItem alloc] initWithTitle:@"悬浮" image:[WFCUImage imageNamed:@"conference_minimize"] callback:^MoreItem * _Nonnull {
+    MoreItem *minimizeItem = [[MoreItem alloc] initWithTitle:WFCString(@"Floating") image:[WFCUImage imageNamed:@"conference_minimize"] callback:^MoreItem * _Nonnull {
         [ws minimize];
         return nil;
     }];
     
     MoreItem *recordItem = [WFCUConferenceManager sharedInstance].currentConferenceInfo.recording ?
-    [[MoreItem alloc] initWithTitle:@"取消录制" image:[WFCUImage imageNamed:@"conference_recording"] callback:^MoreItem * _Nonnull {
+    [[MoreItem alloc] initWithTitle:WFCString(@"CancelRecord") image:[WFCUImage imageNamed:@"conference_recording"] callback:^MoreItem * _Nonnull {
         if(![ws.conferenceInfo.owner isEqualToString:[WFCCNetworkService sharedInstance].userId]) {
             [ws showCommandToast:@"请联系主持人取消录制"];
             return nil;
@@ -851,7 +853,7 @@
         return nil;
     }]
     :
-    [[MoreItem alloc] initWithTitle:@"录制" image:[WFCUImage imageNamed:@"conference_record"] callback:^MoreItem * _Nonnull {
+    [[MoreItem alloc] initWithTitle:WFCString(@"Record") image:[WFCUImage imageNamed:@"conference_record"] callback:^MoreItem * _Nonnull {
         if(![ws.conferenceInfo.owner isEqualToString:[WFCCNetworkService sharedInstance].userId]) {
             [ws showCommandToast:@"请联系主持人录制"];
             return nil;
@@ -860,18 +862,18 @@
         return nil;
     }];
     
-    MoreItem *settingItem = [[MoreItem alloc] initWithTitle:@"设置" image:[WFCUImage imageNamed:@"conference_setting"] callback:^MoreItem * _Nonnull {
+    MoreItem *settingItem = [[MoreItem alloc] initWithTitle:WFCString(@"Setting") image:[WFCUImage imageNamed:@"conference_setting"] callback:^MoreItem * _Nonnull {
         return nil;
     }];
     
     MoreItem *handupItem = [WFCUConferenceManager sharedInstance].isHandup ?
-    [[MoreItem alloc] initWithTitle:@"放下" image:[WFCUImage imageNamed:@"conference_handup_hover"] callback:^MoreItem * _Nonnull{
+    [[MoreItem alloc] initWithTitle:WFCString(@"PutDown") image:[WFCUImage imageNamed:@"conference_handup_hover"] callback:^MoreItem * _Nonnull{
         [[WFCUConferenceManager sharedInstance] handup:NO];
         [ws showCommandToast:@"已放下举手"];
         return nil;
     }]
     :
-    [[MoreItem alloc] initWithTitle:@"举手" image:[WFCUImage imageNamed:@"conference_handup"] callback:^MoreItem * _Nonnull{
+    [[MoreItem alloc] initWithTitle:WFCString(@"Handup") image:[WFCUImage imageNamed:@"conference_handup"] callback:^MoreItem * _Nonnull{
         [[WFCUConferenceManager sharedInstance] handup:YES];
         [ws showCommandToast:@"已举手，等待管理员处理"];
         return nil;
@@ -912,34 +914,22 @@
         __weak typeof(self)ws = self;
         UIAlertController *alertController = [UIAlertController alertControllerWithTitle:nil message:@"如果您想让与会人员继续开会，请选择退出会议" preferredStyle:UIAlertControllerStyleAlert];
         
-        UIAlertAction *action1 = [UIAlertAction actionWithTitle:@"退出会议" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
-            if(ws.currentSession.state != kWFAVEngineStateIdle) {
-                [ws.currentSession leaveConference:NO];
-            }
+        UIAlertAction *action1 = [UIAlertAction actionWithTitle:WFCString(@"QuitConference") style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+            [[WFCUConferenceManager sharedInstance] leaveConference:NO];
         }];
         [alertController addAction:action1];
         
-        UIAlertAction *action2 = [UIAlertAction actionWithTitle:@"结束会议" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
-            if(ws.currentSession.state != kWFAVEngineStateIdle) {
-                [ws.currentSession leaveConference:NO];
-                [ws destroyConference];
-            }
+        UIAlertAction *action2 = [UIAlertAction actionWithTitle:WFCString(@"DestroyConference") style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+            [[WFCUConferenceManager sharedInstance] leaveConference:YES];
         }];
         [alertController addAction:action2];
         
         [ws presentViewController:alertController animated:YES completion:nil];
     } else {
-        [self.currentSession leaveConference:NO];
+        [[WFCUConferenceManager sharedInstance] leaveConference:NO];
     }
 }
 
-- (void)destroyConference {
-    [[WFCUConfigManager globalManager].appServiceProvider  destroyConference:self.currentSession.callId success:^{
-        
-    } error:^(int errorCode, NSString * _Nonnull message) {
-        
-    }];
-}
 
 - (void)managerButtonDidTap:(UIButton *)button {
     WFCUConferenceMemberManagerViewController *vc = [[WFCUConferenceMemberManagerViewController alloc] init];
@@ -947,20 +937,25 @@
     [self presentViewController:nav animated:YES completion:nil];
 }
 
+- (void)onBroadcastingStatusUpdated:(NSNotification *)notification {
+    [self updateScreenSharingButton];
+    [self reloadParticipantCollectionView];
+}
+
+- (void)unsubscribeAllVideoStream {
+    [self.participants enumerateObjectsUsingBlock:^(WFAVParticipantProfile * _Nonnull profile, NSUInteger idx, BOOL * _Nonnull stop) {
+        if(![profile.userId isEqualToString:[WFCCNetworkService sharedInstance].userId]) {
+            [self.currentSession setParticipant:profile.userId screenSharing:profile.screeSharing videoType:WFAVVideoType_None];
+        }
+    }];
+}
 
 - (void)screenSharingButtonDidTap:(UIButton *)button {
-    [[WFCUConferenceManager sharedInstance] enableAudioAndScreansharing];
-    [self updateScreenSharingButton];
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if(self.currentSession.isInAppScreenSharing) {
-            [self minimize];
-        }
-    });
+    [[WFCUConferenceManager sharedInstance] switchAudioAndScreansharing:self.view];
 }
 
 - (void)updateScreenSharingButton {
-    self.screenSharingButton.selected = self.currentSession.isInAppScreenSharing;
+    self.screenSharingButton.selected = self.currentSession.isBroadcasting;
 }
 
 - (void)minimize {
@@ -1121,11 +1116,9 @@
             break;
 
         case UIDeviceOrientationPortrait:
+        default:
             self.view.transform = CGAffineTransformMakeRotation(0);
             [self updateUIByOrientationChanged:NO];
-            break;
-
-        default:
             break;
     }
     return YES;
@@ -1141,6 +1134,7 @@
         [self startConnectedTimer];
         [self updateAudioButton];
         [self updateVideoButton];
+        [self updateSpeakerButton];
     }
 }
 
@@ -1366,6 +1360,10 @@
 }
 
 - (void)showPanel {
+    if(!self.boardView.hidden && !self.topBarView.hidden) {
+        return;
+    }
+    
     self.floatingAudioButton.hidden = YES;
     BOOL landscape = [UIDevice currentDevice].orientation == UIInterfaceOrientationLandscapeLeft || [UIDevice currentDevice].orientation == UIInterfaceOrientationLandscapeRight;
     CGRect bounds = self.view.bounds;
@@ -1394,6 +1392,13 @@
             smallVideoRect.origin.y = self.view.bounds.size.height - bottomBarHeigh - smallVideoRect.size.height;
         }
         self.smallVideoView.frame = smallVideoRect;
+    } completion:^(BOOL finished) {
+        WFCUConferenceCollectionViewLayout *layout = (WFCUConferenceCollectionViewLayout *)self.participantCollectionView.collectionViewLayout;
+        if(!layout.audioOnly && self.participants.count > 1) {
+            self.smallVideoView.hidden = NO;
+        }
+        
+        self.chatButton.hidden = NO;
     }];
     
     if (self.currentSession.audioOnly) {
@@ -1408,6 +1413,10 @@
 }
 
 - (void)hidePanel {
+    if(self.boardView.hidden && self.topBarView.hidden) {
+        return;
+    }
+    
     BOOL landscape = [UIDevice currentDevice].orientation == UIInterfaceOrientationLandscapeLeft || [UIDevice currentDevice].orientation == UIInterfaceOrientationLandscapeRight;
     
     [UIView animateWithDuration:0.5 animations:^{
@@ -1434,6 +1443,8 @@
             floatingAudioBtnFrame.origin.y = self.view.bounds.size.height - (landscape ? 0 : [WFCUUtilities wf_safeDistanceBottom]) - FLOATING_AUDIO_BUTTON_SIZE - CONFERENCE_BAR_HEIGHT;
             self.floatingAudioButton.frame = floatingAudioBtnFrame;
         }];
+        self.smallVideoView.hidden = YES;
+        self.chatButton.hidden = YES;
     }];
 }
 
@@ -1759,9 +1770,15 @@
         }
     }
 }
+
 - (void)onScreenSharingFailure {
     
 }
+
+- (void)onStopBroadcastBtn:(id)sender {
+    [[WFCUConferenceManager sharedInstance] switchAudioAndScreansharing:self.view];
+}
+
 - (void)checkAVPermission {
     [self checkCapturePermission:nil];
     [self checkRecordPermission:nil];
@@ -1802,7 +1819,7 @@
     __weak typeof(self)ws = self;
     UIAlertController *alertController = [UIAlertController alertControllerWithTitle:nil message:@"会议发言人数已满，是否以观众身份入会？" preferredStyle:UIAlertControllerStyleAlert];
     
-    UIAlertAction *action1 = [UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+    UIAlertAction *action1 = [UIAlertAction actionWithTitle:WFCString(@"Cancel") style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
         [[WFAVEngineKit sharedEngineKit] dismissViewController:ws];
     }];
     [alertController addAction:action1];
@@ -1816,7 +1833,7 @@
     BOOL advanced = self.currentSession.isAdvanced;
     
     
-    UIAlertAction *action2 = [UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+    UIAlertAction *action2 = [UIAlertAction actionWithTitle:WFCString(@"Ok") style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
         [[WFAVEngineKit sharedEngineKit] dismissViewController:ws];
         
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -1837,7 +1854,7 @@
         __weak typeof(self)ws = self;
         UIAlertController *alertController = [UIAlertController alertControllerWithTitle:nil message:@"会议未开始或者已经结束，请点击启动来开始会议" preferredStyle:UIAlertControllerStyleAlert];
         
-        UIAlertAction *action1 = [UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+        UIAlertAction *action1 = [UIAlertAction actionWithTitle:WFCString(@"Cancel") style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
             [[WFAVEngineKit sharedEngineKit] dismissViewController:ws];
         }];
         [alertController addAction:action1];
@@ -1871,7 +1888,7 @@
         __weak typeof(self)ws = self;
         UIAlertController *alertController = [UIAlertController alertControllerWithTitle:nil message:[NSString stringWithFormat:@"会议未开始或者已经结束，请联系 %@ 启动会议", userInfo.friendAlias.length ? userInfo.friendAlias : userInfo.displayName] preferredStyle:UIAlertControllerStyleAlert];
 
-        UIAlertAction *action1 = [UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+        UIAlertAction *action1 = [UIAlertAction actionWithTitle:WFCString(@"Ok") style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
             [[WFAVEngineKit sharedEngineKit] dismissViewController:ws];
         }];
         [alertController addAction:action1];
@@ -1892,8 +1909,14 @@
 }
 
 - (void)updateVideoStreams {
+    if([[WFCUConferenceManager sharedInstance] isBroadcasting]) {
+        [self unsubscribeAllVideoStream];
+        return;
+    }
+    
     WFCUConferenceCollectionViewLayout *layout = (WFCUConferenceCollectionViewLayout *)self.participantCollectionView.collectionViewLayout;
     if(layout.audioOnly) {
+        [self unsubscribeAllVideoStream];
         return;
     }
     
@@ -2008,6 +2031,9 @@
 
 #pragma mark - UICollectionViewDataSource
 - (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
+    if([[WFCUConferenceManager sharedInstance] isBroadcasting]) {
+        return 1;
+    }
     WFCUConferenceCollectionViewLayout *layout = (WFCUConferenceCollectionViewLayout *)collectionView.collectionViewLayout;
     if(layout.audioOnly) {
         NSLog(@"count %d", (self.participants.count-1) / 12 + 1);
@@ -2038,6 +2064,32 @@
 
 // The cell that is returned must be retrieved from a call to -dequeueReusableCellWithReuseIdentifier:forIndexPath:
 - (__kindof UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
+    if([[WFCUConferenceManager sharedInstance] isBroadcasting]) {
+        UICollectionViewCell *broadcastingCell = [collectionView dequeueReusableCellWithReuseIdentifier:@"broadcasting" forIndexPath:indexPath];
+        for (UIView *subView in broadcastingCell.contentView.subviews) {
+            [subView removeFromSuperview];
+        }
+        UIButton *stopBtn = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 120, 120)];
+        CGRect bounds = self.view.bounds;
+        stopBtn.center = CGPointMake(bounds.size.width/2, bounds.size.height/2);
+        [stopBtn setImage:[WFCUImage imageNamed:@"conference_stop_screen_sharing"] forState:UIControlStateNormal];
+        [stopBtn setTitle:@"停止共享" forState:UIControlStateNormal];
+        stopBtn.titleLabel.font = [UIFont systemFontOfSize:14];
+
+        stopBtn.titleEdgeInsets = UIEdgeInsetsMake(stopBtn.imageView.frame.size.height / 2-8, -stopBtn.imageView.frame.size.width,
+                                                  -stopBtn.imageView.frame.size.height, 0);
+        stopBtn.imageEdgeInsets = UIEdgeInsetsMake(-4,
+                                                  0, stopBtn.imageView.frame.size.height / 2, -stopBtn.titleLabel.bounds.size.width);
+        
+        stopBtn.imageView.layer.masksToBounds = YES;
+        stopBtn.imageView.layer.cornerRadius = 10.f;
+        
+        [stopBtn addTarget:self action:@selector(onStopBroadcastBtn:) forControlEvents:UIControlEventTouchDown];
+        
+        [broadcastingCell.contentView addSubview:stopBtn];
+        return broadcastingCell;
+    }
+    
     WFCUConferenceCollectionViewLayout *layout = (WFCUConferenceCollectionViewLayout *)self.participantCollectionView.collectionViewLayout;
     if(layout.audioOnly) {
         WFCUConferenceAudioCollectionViewCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:@"audio_cell" forIndexPath:indexPath];
@@ -2224,7 +2276,13 @@
                     [cell addSubview:self.smallVideoView];
                 }
 
-                self.smallVideoView.hidden = NO;
+                if(!self.smallVideoView.hidden) {
+                    [self showPanel];
+                } else {
+                    if(self.floatingAudioButton.hidden) {
+                        self.smallVideoView.hidden = NO;
+                    }
+                }
                 [self.currentSession setupLocalVideoView:self.smallVideoView scalingType:self.scalingType];
                 WFCCUserInfo *myUserInfo = [[WFCCIMService sharedWFCIMService] getUserInfo:[WFCCNetworkService sharedInstance].userId refresh:NO];
                 [self.smallVideoView setUserInfo:myUserInfo callProfile:self.currentSession.myProfile];
@@ -2248,12 +2306,12 @@
     } else {
         UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"" message:@"主持人邀请您发言" preferredStyle:UIAlertControllerStyleAlert];
         
-        UIAlertAction *action1 = [UIAlertAction actionWithTitle:@"忽略" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+        UIAlertAction *action1 = [UIAlertAction actionWithTitle:WFCString(@"Ignore") style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
             
         }];
         [alertController addAction:action1];
         
-        UIAlertAction *action2 = [UIAlertAction actionWithTitle:@"接受" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+        UIAlertAction *action2 = [UIAlertAction actionWithTitle:WFCString(@"Accept") style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
             [[WFAVEngineKit sharedEngineKit].currentSession switchAudience:isAudience];
         }];
         [alertController addAction:action2];
@@ -2279,7 +2337,7 @@
             if(commandContent.boolValue && [WFAVEngineKit sharedEngineKit].currentSession.isConference && ([WFAVEngineKit sharedEngineKit].currentSession.isAudience || [WFAVEngineKit sharedEngineKit].currentSession.isAudioMuted)) {
                 UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"" message:@"主持人关闭了全员静音，是否要打开麦克风" preferredStyle:UIAlertControllerStyleAlert];
                 
-                UIAlertAction *action1 = [UIAlertAction actionWithTitle:@"忽略" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+                UIAlertAction *action1 = [UIAlertAction actionWithTitle:WFCString(@"Ignore") style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
                     
                 }];
                 [alertController addAction:action1];
@@ -2301,12 +2359,12 @@
             } else {
                 UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"" message:@"主持人邀请您发言" preferredStyle:UIAlertControllerStyleAlert];
                 
-                UIAlertAction *action1 = [UIAlertAction actionWithTitle:@"拒绝" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+                UIAlertAction *action1 = [UIAlertAction actionWithTitle:WFCString(@"Reject") style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
                     [[WFCUConferenceManager sharedInstance] rejectUnmuteRequest];
                 }];
                 [alertController addAction:action1];
                 
-                UIAlertAction *action2 = [UIAlertAction actionWithTitle:@"接受" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+                UIAlertAction *action2 = [UIAlertAction actionWithTitle:WFCString(@"Accept") style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
                     [[WFCUConferenceManager sharedInstance] muteAudio:NO];
                 }];
                 [alertController addAction:action2];

@@ -42,12 +42,12 @@
     [self.view addSubview:self.tableView];
     [self.tableView reloadData];
     
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"关闭" style:UIBarButtonItemStyleDone target:self action:@selector(onClose:)];
+    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:WFCString(@"Close") style:UIBarButtonItemStyleDone target:self action:@selector(onClose:)];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    if([WFCUConferenceManager sharedInstance].handupMembers.count) {
+    if([WFCUConferenceManager sharedInstance].handupMembers.count && !self.putdownAllBtn) {
         CGRect bounds = self.view.bounds;
         CGFloat buttonHeight = 48;
         CGFloat buttonWidth = bounds.size.width - 16 - 16;
