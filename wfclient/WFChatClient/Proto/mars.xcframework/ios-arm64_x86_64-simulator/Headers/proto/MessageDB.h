@@ -183,7 +183,8 @@ namespace mars {
             long InsertOrUpdateChannelInfo(const TChannelInfo &channelInfo);
             
             bool BeginTransaction();
-            void CommitTransaction();
+            bool CommitTransaction();
+            bool RollbackTransaction();
             friend class LoadRemoteMessagesPublishCallback;
             std::list<TConversation> GetConversationListOld(const std::list<int> &conversationTypes, const std::list<int> &lines);
             
@@ -226,7 +227,7 @@ namespace mars {
             long insertSyncBurnReaded(int type, const std::string &target, int line, int64_t readDt, int64_t value);
             bool deleteSyncBurnReaded(long sid);
             SyncBurnReadedEntry getSyncBurnReadedEntry();
-            
+            void deleteUserMessages(const std::list<std::string> &userIds);
             void _OnCheckBurn();
             friend DB2;
         private:

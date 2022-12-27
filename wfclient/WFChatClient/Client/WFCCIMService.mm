@@ -3580,6 +3580,8 @@ public:
 
 - (long)insertMessage:(WFCCMessage *)message {
     mars::stn::TMessage tmsg;
+    
+    tmsg.messageUid = message.messageUid;
     fillTMessage(tmsg, message.conversation, message.content);
     
     if(message.status >= Message_Status_Unread) {
@@ -3608,8 +3610,12 @@ public:
     return mars::stn::MessageDB::Instance()->BeginTransaction();
 }
 
-- (void)commitTransaction {
-    mars::stn::MessageDB::Instance()->CommitTransaction();
+- (BOOL)commitTransaction {
+    return mars::stn::MessageDB::Instance()->CommitTransaction();
+}
+
+- (BOOL)rollbackTransaction {
+    return mars::stn::MessageDB::Instance()->RollbackTransaction();
 }
 
 - (BOOL)isCommercialServer {
