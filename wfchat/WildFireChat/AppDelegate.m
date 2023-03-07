@@ -32,6 +32,8 @@
 #import <PttClient/WFPttClient.h>
 #endif
 
+#import "OrgService.h"
+
 #if USE_CALL_KIT
 #import "WFCCallKitManager.h"
 #endif
@@ -112,6 +114,7 @@
     
     [WFCUConfigManager globalManager].appServiceProvider = [AppService sharedAppService];
     [WFCUConfigManager globalManager].fileTransferId = FILE_TRANSFER_ID;
+    [WFCUConfigManager globalManager].orgServiceProvider = [OrgService sharedOrgService];
 #ifdef WFC_PTT
     //初始化对讲SDK
     [WFPttClient sharedClient].delegate = self;
@@ -183,6 +186,14 @@
 (UIUserNotificationSettings *)notificationSettings {
     // register to receive notifications
     [application registerForRemoteNotifications];
+}
+
+//会议需要支持方向旋转
+-(UIInterfaceOrientationMask)application:(UIApplication *)application supportedInterfaceOrientationsForWindow:(UIWindow *)window {
+    if([NSStringFromClass([window.rootViewController class]) isEqualToString:@"WFCUConferenceViewController"]) {
+        return UIInterfaceOrientationMaskPortrait | UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight;
+    }
+    return UIInterfaceOrientationMaskPortrait;
 }
 
 - (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
@@ -607,13 +618,23 @@
             [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"savedToken"];
             [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"savedUserId"];
             [[AppService sharedAppService] clearAppServiceAuthInfos];
+            [[OrgService sharedOrgService] clearOrgServiceAuthInfos];
             [[NSUserDefaults standardUserDefaults] synchronize];
+            
+            self.firstConnected = NO;
         } else if(status == kConnectionStatusConnected) {
             if(!self.firstConnected) {
                 self.firstConnected = YES;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                     [self prepardDataForShareExtension];
                 });
+                
+                [[OrgService sharedOrgService] login:^{
+                    NSLog(@"on org service login success");
+                    [[WFCUOrganizationCache sharedCache] loadMyOrganizationInfos];
+                } error:^(int errCode) {
+                    NSLog(@"on org service login failure");
+                }];
             }
         }
     });
@@ -853,7 +874,6 @@ void systemAudioCallback (SystemSoundID soundID, void* clientData) {
     if (self.audioPlayer) {
         [self.audioPlayer stop];
         self.audioPlayer = nil;
-        [[AVAudioSession sharedInstance] setActive:NO withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
     }
 }
 

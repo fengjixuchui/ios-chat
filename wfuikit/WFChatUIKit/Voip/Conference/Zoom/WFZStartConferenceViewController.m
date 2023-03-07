@@ -102,6 +102,7 @@
     info.advance = self.advanceConference;
     info.allowTurnOnMic = self.allowTurnOnMic;
     info.managers = @[@"111", @"222"];
+    info.maxParticipants = 20;
     
     __block MBProgressHUD *hud = [self startProgress:@"创建中"];
     __weak typeof(self)ws = self;
@@ -200,6 +201,14 @@
     [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:1 inSection:1]] withRowAnimation:UITableViewRowAnimationFade];
 }
 
+- (void)setAdvanceConference:(BOOL)advanceConference {
+    _advanceConference = advanceConference;
+    if(advanceConference) {
+        self.enableParticipant = NO;
+        self.allowTurnOnMic = YES;
+    }
+}
+
 - (nonnull UITableViewCell *)tableView:(nonnull UITableView *)tableView cellForRowAtIndexPath:(nonnull NSIndexPath *)indexPath {
     __weak typeof(self)ws = self;
     
@@ -255,6 +264,8 @@
                 }
                 handleBlock(YES);
             };
+            
+            switchCell.valueSwitch.enabled = !self.advanceConference;
         } else {
             if(!self.enableParticipant) {
                 switchCell.valueSwitch.enabled = YES;
@@ -325,6 +336,8 @@
         cell.on = self.advanceConference;
         cell.onSwitch = ^(BOOL value, int type, void (^onDone)(BOOL success)) {
             ws.advanceConference = value;
+            [ws.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:0 inSection:2]] withRowAnimation:UITableViewRowAnimationFade];
+            [ws.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:1 inSection:2]] withRowAnimation:UITableViewRowAnimationFade];
             [ws.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:1 inSection:3]] withRowAnimation:UITableViewRowAnimationFade];
             onDone(YES);
         };

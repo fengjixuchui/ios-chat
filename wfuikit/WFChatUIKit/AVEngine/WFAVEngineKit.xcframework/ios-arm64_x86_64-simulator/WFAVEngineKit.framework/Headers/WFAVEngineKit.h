@@ -16,7 +16,6 @@ FOUNDATION_EXPORT const unsigned char WFAVEngineKitVersionString[];
 
 #import <Foundation/Foundation.h>
 #import <WebRTC/WebRTC.h>
-#import <WFChatClient/WFCChatClient.h>
 #import <WFAVEngineKit/WFAVCallSession.h>
 #import <PushKit/PushKit.h>
 
@@ -164,6 +163,8 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
   kWFAVCallEndReasonRoomNotExist,
   kWFAVCallEndReasonRoomParticipantsFull
 };
+
+@class WFCCConversation;
 
 #pragma mark - 通话监听
 /**
@@ -366,7 +367,7 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
 @end
 
 @protocol WFAVExternalFrameDelegate <NSObject>
-- (void)didCaptureVideoFrame:(nonnull RTCVideoFrame *)frame;
+- (void)capturer:(_Nullable id)capturer didCaptureVideoFrame:(nonnull RTCVideoFrame *)frame;
 @end
 
 @protocol WFAVExternalVideoSource <NSObject>
@@ -482,6 +483,7 @@ typedef NS_ENUM(NSInteger, WFAVCallEndReason) {
                                     audience:(BOOL)audience
                                     advanced:(BOOL)advanced
                                       record:(BOOL)record
+                             maxParticipants:(int)maxParticipats
                              sessionDelegate:(id<WFAVCallSessionDelegate>_Nonnull)sessionDelegate;
 
 /* 为了兼容视频会议UI，本功能未实现*/
@@ -690,6 +692,8 @@ typedef NS_ENUM(NSInteger, WFAVVideoType) {
 
 /* 此属性没有意义，仅为了兼容UI代码 */
 - (void)setBroadcastingWithVideoSource:(_Nullable id<WFAVExternalVideoSource>)externalVideoSource;
+
+@property(nonatomic, assign, readonly, getter=isMultiCall) BOOL multiCall;
 
 /**
 呼叫附加信息
